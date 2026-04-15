@@ -8,6 +8,13 @@ from routes.employee_routes import router as employee_router
 from routes.course_routes import router as course_router
 from routes.assessment_routes import router as assessment_router
 from routes.scheme_routes import router as scheme_router
+import asyncio
+
+@app.get("/seed")
+def run_seed():
+    from seed import seed
+    asyncio.run(seed())
+    return {"message": "Database seeded successfully"}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
