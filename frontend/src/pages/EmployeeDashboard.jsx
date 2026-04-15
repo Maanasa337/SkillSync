@@ -205,8 +205,8 @@ export default function EmployeeDashboard() {
                     </div>
                 </div>
 
-                <div style={{padding: '40px', display: 'flex', gap: '40px'}}>
-                     <div style={{flex: 2}}>
+                <div className="course-detail-body">
+                     <div className="course-detail-content">
                          <h3 style={{marginBottom: '15px'}}>Content Overview</h3>
                          <p style={{color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '30px'}}>{courseContent.description}</p>
                          
@@ -220,7 +220,7 @@ export default function EmployeeDashboard() {
                          </ul>
                      </div>
                      
-                     <div style={{flex: 1, background: 'var(--surface-hover)', padding: '24px', borderRadius: 'var(--radius-lg)', height: 'fit-content'}}>
+                     <div className="course-detail-meta">
                          <h4 style={{marginBottom: '20px'}}>Training Meta</h4>
                          <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', color: 'var(--text-secondary)'}}>
                              <IconClock size={18} />

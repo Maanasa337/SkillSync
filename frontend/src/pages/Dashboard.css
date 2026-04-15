@@ -158,6 +158,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-md);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -292,7 +294,7 @@
 /* ---- Incentive Cards ---- */
 .incentive-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--space-lg);
 }
 
@@ -351,7 +353,14 @@
 
 /* ---- Employee Table ---- */
 .table-card {
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
 }
 
 .emp-name {
@@ -516,7 +525,7 @@
 /* ---- Growth Insights ---- */
 .insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--space-md);
 }
 .insight-card {
@@ -657,4 +666,30 @@
   .main-content { margin-left: 70px; }
   .overview-grid { grid-template-columns: 1fr; }
   .overview-grid.three-col { grid-template-columns: 1fr; }
+  .incentive-grid { grid-template-columns: 1fr; }
+  .course-grid { grid-template-columns: 1fr; }
+  .insights-grid { grid-template-columns: 1fr; }
+  .course-detail-body { flex-direction: column; padding: var(--space-md); }
+}
+
+/* ---- Dynamic Classes ---- */
+.course-detail-body {
+  padding: 40px; 
+  display: flex; 
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.course-detail-meta {
+  flex: 1; 
+  min-width: 280px;
+  background: var(--surface-hover); 
+  padding: 24px; 
+  border-radius: var(--radius-lg); 
+  height: fit-content;
+}
+
+.course-detail-content {
+  flex: 2;
+  min-width: 300px;
 }

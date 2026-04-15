@@ -242,7 +242,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Quick Charts */}
-              <div className="charts-row" style={{ marginTop: 'var(--space-xl)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="charts-row" style={{ marginTop: 'var(--space-xl)' }}>
                 <div className="card chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
                   <h3>Assessment Pass Rates</h3>
                   <div className="chart-container" style={{ width: '100%', flex: 1, minHeight: '350px', paddingTop: '20px' }}>
