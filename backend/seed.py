@@ -75,7 +75,7 @@ async def seed():
             "category": "Safety", "type": "mandatory", "linked_scheme": "NAPS", "incentive_value": 5000,
             "description": "Comprehensive guide to industrial safety protocols, hazard identification, and emergency response.",
             "skills": ["Hazard Identification", "PPE Usage", "Emergency Response"],
-            "youtube_url": "https://www.youtube.com/embed/jB2kS-S-cOE",
+            "youtube_url": "https://www.youtube.com/embed/jFDWlKayrTc",
             "duration_minutes": 45,
             "duration_days": 15
         },
@@ -84,7 +84,7 @@ async def seed():
             "category": "Safety", "type": "mandatory", "linked_scheme": "NAPS", "incentive_value": 3000,
             "description": "Learn the classes of fire, preventative measures, and how to operate various fire extinguishers safely.",
             "skills": ["Fire Classification", "Extinguisher Operation", "Evacuation Planning"],
-            "youtube_url": "https://www.youtube.com/embed/2_88YQ9sI5o",
+            "youtube_url": "https://www.youtube.com/embed/PQV71INDaqY",
             "duration_minutes": 60,
             "duration_days": 10
         },
@@ -93,7 +93,7 @@ async def seed():
             "category": "Operations", "type": "role-based", "linked_scheme": "NEEM", "incentive_value": 8000,
             "description": "Foundational training on CNC machine operations, tool setup, and basic G-code programming.",
             "skills": ["CNC Basics", "Tool Setup", "G-Code Reading"],
-            "youtube_url": "https://www.youtube.com/embed/WJ6U9ZcZ0mE",
+            "youtube_url": "https://www.youtube.com/embed/cj0-wSGGe6g",
             "duration_minutes": 90,
             "duration_days": 30
         },
@@ -102,7 +102,7 @@ async def seed():
             "category": "Quality", "type": "mandatory", "linked_scheme": "PMKVY", "incentive_value": 6000,
             "description": "Introduction to ISO 9001 quality management principles and shop-floor implementations.",
             "skills": ["ISO 9001", "Defect Tracking", "Audit Preparation"],
-            "youtube_url": "https://www.youtube.com/embed/d3W8eO5I90k",
+            "youtube_url": "https://www.youtube.com/embed/O5T4H8K_rwQ",
             "duration_minutes": 75,
             "duration_days": 20
         },
@@ -111,7 +111,7 @@ async def seed():
             "category": "Operations", "type": "role-based", "linked_scheme": "NEEM", "incentive_value": 10000,
             "description": "Understand modern plant layouts, material flow, and basic manufacturing automation.",
             "skills": ["Plant Layouts", "Material Flow", "Automation Basics"],
-            "youtube_url": "https://www.youtube.com/embed/5H3fB-H6H3E",
+            "youtube_url": "https://www.youtube.com/embed/4vq0FKWYud8",
             "duration_minutes": 120,
             "duration_days": 45
         },
@@ -120,7 +120,7 @@ async def seed():
             "category": "Quality", "type": "role-based", "linked_scheme": "PMKVY", "incentive_value": 12000,
             "description": "Concepts of waste reduction, continuous improvement, and Six Sigma DMAIC framework.",
             "skills": ["DMAIC Framework", "Waste Reduction", "5S Methodology"],
-            "youtube_url": "https://www.youtube.com/embed/PcvXqJtX3uE",
+            "youtube_url": "https://www.youtube.com/embed/s2HCrhNVfak",
             "duration_minutes": 150,
             "duration_days": 60
         },
@@ -134,27 +134,61 @@ async def seed():
 
     # ---- Assessments ----
     # 5 MCQ questions per course
-    for i, cid in enumerate(course_ids):
-        questions = [
-            {"question": f"Sample assessment question 1 for {courses_data[i]['title']}?", "options": ["Option A", "Option B", "Option C", "Option D"], "correct_answer": 0},
-            {"question": f"Sample assessment question 2 for {courses_data[i]['title']}?", "options": ["Option A", "Option B", "Option C", "Option D"], "correct_answer": 1},
-            {"question": f"Sample assessment question 3 for {courses_data[i]['title']}?", "options": ["Option A", "Option B", "Option C", "Option D"], "correct_answer": 2},
-            {"question": f"Sample assessment question 4 for {courses_data[i]['title']}?", "options": ["Option A", "Option B", "Option C", "Option D"], "correct_answer": 3},
-            {"question": f"Sample assessment question 5 for {courses_data[i]['title']}?", "options": ["Option A", "Option B", "Option C", "Option D"], "correct_answer": 0},
+    assessments_data = [
+        # Course 0: Industrial Safety Fundamentals
+        [
+            {"question": "What does PPE stand for?", "options": ["Personal Protective Equipment", "Process Potential Elements", "Production Plant Engineering", "Part Processing Equipment"], "correct_answer": 0},
+            {"question": "Which of these is NOT typically considered PPE?", "options": ["Safety Goggles", "Hard Hat", "High-Visibility Vest", "Office Chair"], "correct_answer": 3},
+            {"question": "When should PPE be inspected?", "options": ["Once a year", "Every month", "Before each use", "Only when broken"], "correct_answer": 2},
+            {"question": "What is the primary purpose of a hard hat?", "options": ["Keep head warm", "Protect from falling objects", "Identify job role", "Look professional"], "correct_answer": 1},
+            {"question": "Who is responsible for properly wearing required PPE?", "options": ["The Supervisor", "The Safety Manager", "The Employee", "The CEO"], "correct_answer": 2},
+        ],
+        # Course 1: Fire Safety & Extinguisher Use
+        [
+            {"question": "What does the acronym PASS stand for in fire extinguisher use?", "options": ["Point, Aim, Squeeze, Sweep", "Pull, Aim, Squeeze, Sweep", "Pull, Aim, Shoot, Sweep", "Point, Aim, Squeeze, Stop"], "correct_answer": 1},
+            {"question": "Which fire class involves ordinary combustibles like wood and paper?", "options": ["Class A", "Class B", "Class C", "Class D"], "correct_answer": 0},
+            {"question": "What type of extinguisher is best for electrical fires?", "options": ["Water", "Foam", "CO2", "Wet Chemical"], "correct_answer": 2},
+            {"question": "Before fighting a fire, what should you do first?", "options": ["Find an extinguisher", "Ensure alarms are activated and path is clear", "Open all doors", "Turn off lights"], "correct_answer": 1},
+            {"question": "Where should you aim the fire extinguisher nozzle?", "options": ["At the top of the flames", "In the middle of the flames", "At the base of the fire", "Around the fire"], "correct_answer": 2},
+        ],
+        # Course 2: CNC Machine Operations & Setup
+        [
+            {"question": "What does CNC stand for?", "options": ["Computer Number Core", "Computer Numerical Control", "Central Network Computer", "Calculated Numerical Control"], "correct_answer": 1},
+            {"question": "Which programming language is commonly used in CNC?", "options": ["Python", "Java", "G-Code", "C++"], "correct_answer": 2},
+            {"question": "What axis typically represents the vertical movement (up and down) in a CNC mill?", "options": ["X-axis", "Y-axis", "Z-axis", "A-axis"], "correct_answer": 2},
+            {"question": "What is the tool called that holds the cutting bit?", "options": ["Spindle", "Turret", "Chuck", "Collet"], "correct_answer": 3},
+            {"question": "What is 'feed rate' in CNC machining?", "options": ["Speed the spindle rotates", "Speed the tool moves through the material", "Time it takes to boot the machine", "Rate of material cost"], "correct_answer": 1},
+        ],
+        # Course 3: Quality Control (ISO 9001)
+        [
+            {"question": "What is ISO 9001 primarily focused on?", "options": ["Environmental Management", "Quality Management Systems", "Occupational Health", "Information Security"], "correct_answer": 1},
+            {"question": "Which concept represents continuous improvement in quality?", "options": ["Kaizen", "Kanban", "Poka-yoke", "Heijunka"], "correct_answer": 0},
+            {"question": "What is the PDCA cycle?", "options": ["Plan, Do, Check, Act", "Process, Data, Control, Analyze", "Product, Design, Correct, Assess", "Prevent, Detect, Correct, Avoid"], "correct_answer": 0},
+            {"question": "Who is responsible for quality under ISO 9001?", "options": ["Only the Quality Manager", "Only Top Management", "Everyone in the organization", "Only the Inspectors"], "correct_answer": 2},
+            {"question": "What is an internal audit?", "options": ["An inspection by government", "An evaluation by a customer", "An independent review conducted within the organization", "A financial check"], "correct_answer": 2},
+        ],
+        # Course 4: Advanced Manufacturing Layout
+        [
+            {"question": "What is the main goal of plant layout optimization?", "options": ["Increase energy consumption", "Maximize material movement", "Minimize material handling and cost", "Reduce worker breaks"], "correct_answer": 2},
+            {"question": "Which layout type groups machines by function?", "options": ["Product layout", "Process layout", "Fixed-position layout", "Cellular layout"], "correct_answer": 1},
+            {"question": "In a product layout, how are resources arranged?", "options": ["According to the sequence of operations", "Randomly", "By department", "In a U-shape always"], "correct_answer": 0},
+            {"question": "What does 'takt time' refer to?", "options": ["Time taken for lunch breaks", "Rate at which products must be made to meet customer demand", "Time a machine is broken down", "Time to change a tool"], "correct_answer": 1},
+            {"question": "Which layout is ideal for ship building?", "options": ["Process layout", "Product layout", "Fixed-position layout", "Assembly line"], "correct_answer": 2},
+        ],
+        # Course 5: Lean Six Sigma Fundamentals
+        [
+            {"question": "What does the 'DMAIC' methodology stand for?", "options": ["Design, Make, Assess, Improve, Check", "Define, Measure, Analyze, Improve, Control", "Detect, Monitor, Act, Inform, Correct", "Data, Metrics, Analysis, Ideas, Conclusions"], "correct_answer": 1},
+            {"question": "What is the primary focus of 'Lean'?", "options": ["Reducing variation", "Eliminating waste", "Increasing prices", "Hiring more staff"], "correct_answer": 1},
+            {"question": "What does Six Sigma primarily aim to reduce?", "options": ["Inventory", "Waste", "Process variation and defects", "Employee turnover"], "correct_answer": 2},
+            {"question": "What is a 'Kaizen event'?", "options": ["A company party", "A long-term strategic meeting", "A short, focused improvement project", "A financial audit"], "correct_answer": 2},
+            {"question": "In Six Sigma, what does 'DPMO' stand for?", "options": ["Defects Per Million Opportunities", "Days Per Month Operating", "Data Processing Management Office", "Defective Parts Mostly Obsolete"], "correct_answer": 0},
         ]
-        # Make the first course have realistic PPE questions for demo
-        if i == 0:
-            questions = [
-                {"question": "What does PPE stand for?", "options": ["Personal Protective Equipment", "Process Potential Elements", "Production Plant Engineering", "Part Processing Equipment"], "correct_answer": 0},
-                {"question": "Which of these is NOT typically considered PPE?", "options": ["Safety Goggles", "Hard Hat", "High-Visibility Vest", "Office Chair"], "correct_answer": 3},
-                {"question": "When should PPE be inspected?", "options": ["Once a year", "Every month", "Before each use", "Only when broken"], "correct_answer": 2},
-                {"question": "What is the primary purpose of a hard hat?", "options": ["Keep head warm", "Protect from falling objects", "Identify job role", "Look professional"], "correct_answer": 1},
-                {"question": "Who is responsible for properly wearing required PPE?", "options": ["The Supervisor", "The Safety Manager", "The Employee", "The CEO"], "correct_answer": 2},
-            ]
-            
+    ]
+
+    for i, cid in enumerate(course_ids):
         await db.assessments.insert_one({
             "course_id": cid,
-            "questions": questions
+            "questions": assessments_data[i]
         })
     print(f"📝 {len(course_ids)} assessments created")
 

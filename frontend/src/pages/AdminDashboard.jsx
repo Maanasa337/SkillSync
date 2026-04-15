@@ -32,6 +32,18 @@ export default function AdminDashboard() {
   const [scoreboardCourseId, setScoreboardCourseId] = useState('');
   const [scoreboardData, setScoreboardData] = useState([]);
 
+  const fetchScoreboard = async (cId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/courses/${cId}/leaderboard`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setScoreboardData(res.data);
+    } catch (error) {
+      console.error('Failed to load scoreboard', error);
+    }
+  };
+
   const fetchData = async () => {
     try {
       const [dashRes, empRes, courseRes] = await Promise.all([
@@ -48,8 +60,8 @@ export default function AdminDashboard() {
         setScoreboardCourseId(courseRes.data[0].id);
         fetchScoreboard(courseRes.data[0].id);
       }
-    } catch (err) {
-      if (err.response?.status === 401) {
+    } catch (error) {
+      if (error.response?.status === 401) {
         logout();
         navigate('/login');
       }
@@ -58,18 +70,6 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => { fetchData(); }, [statusFilter]);
-
-  const fetchScoreboard = async (cId) => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_URL}/courses/${cId}/leaderboard`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setScoreboardData(res.data);
-    } catch (err) {
-      console.error('Failed to load scoreboard', err);
-    }
-  };
 
   const handleScoreboardChange = (e) => {
     const cid = e.target.value;
@@ -131,7 +131,8 @@ export default function AdminDashboard() {
             title: `${schemeName} - ${status === 'eligible' ? 'Ready to Claim' : 'Pending Requirements'}`,
             data: res.data
         });
-      } catch (err) {
+      } catch (error) {
+          console.error(error);
           setActionMsg('Failed to load employee details');
       }
   }
@@ -276,13 +277,34 @@ const PIE_COLORS = ['#A1C942', '#FFC000', '#EF4444'];
           )}
 
           {/* Incentive Progress */}
-          {activeSection === 'incentives' && (
+          {activeSection === 'incentives' && (() => {
+            const SCHEME_META = {
+              NAPS: {
+                description: 'Govt. apprenticeship scheme — stipend shared between employer & BOAT for on-the-job training.',
+                benefit: 'Saves 25–35% salary cost',
+                benefitColor: '#16A34A',
+              },
+              NEEM: {
+                description: 'On-the-job skill training via AICTE-approved NEEM facilitators for non-enrolled youth.',
+                benefit: 'Cut hiring costs by 40–50%',
+                benefitColor: '#0EA5E9',
+              },
+              PMKVY: {
+                description: 'MSDE-funded scheme that reimburses training costs for skill certification of workers.',
+                benefit: 'Up to ₹8,000 reimbursed per trainee',
+                benefitColor: '#7C3AED',
+              },
+            };
+
+            return (
             <section className="fade-in">
               <h2 className="section-title">Incentive Intelligence Engine</h2>
               <div className="incentive-grid">
-                {(incentive_progress || []).map((inc) => (
+                {(incentive_progress || []).map((inc) => {
+                  const meta = SCHEME_META[inc.scheme_name] || {};
+                  return (
                   <div key={inc.id} className="card incentive-card">
-                    <div className="incentive-header" style={{ marginBottom: "20px" }}>
+                    <div className="incentive-header" style={{ marginBottom: "14px" }}>
                       <div>
                         <h3>{inc.scheme_name}</h3>
                         <span style={{marginTop: "5px"}} className={`badge ${inc.status === 'claimed' ? 'badge-success' : 'badge-warning'}`}>
@@ -291,6 +313,28 @@ const PIE_COLORS = ['#A1C942', '#FFC000', '#EF4444'];
                       </div>
                       <p className="incentive-amount" style={{ color: "var(--success)" }}>₹{inc.claimable_amount.toLocaleString()}</p>
                     </div>
+
+                    {/* Scheme description + financial benefit */}
+                    {meta.description && (
+                      <div style={{ marginBottom: "16px" }}>
+                        <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.5", marginBottom: "8px" }}>
+                          {meta.description}
+                        </p>
+                        <span style={{
+                          display: "inline-block",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          letterSpacing: "0.3px",
+                          padding: "3px 10px",
+                          borderRadius: "20px",
+                          background: `${meta.benefitColor}18`,
+                          color: meta.benefitColor,
+                          border: `1px solid ${meta.benefitColor}40`,
+                        }}>
+                          💰 {meta.benefit}
+                        </span>
+                      </div>
+                    )}
                     
                     <div className="incentive-stats" style={{ marginBottom: "15px", gap: "10px" }}>
                       <div className="btn-outline" style={{flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer", textAlign: "center" }} onClick={() => fetchSchemeEmployees(inc.scheme_name, 'eligible')}>
@@ -318,10 +362,12 @@ const PIE_COLORS = ['#A1C942', '#FFC000', '#EF4444'];
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
-          )}
+            );
+          })()}
 
           {/* Employee Directory */}
           {activeSection === 'employees' && (

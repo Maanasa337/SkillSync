@@ -12,14 +12,14 @@ async def connect_db():
     # Create indexes
     await db.users.create_index("email", unique=True)
     await db.progress.create_index([("user_id", 1), ("course_id", 1)], unique=True)
-    print(f"✅ Connected to MongoDB: {DATABASE_NAME}")
+    print(f"[OK] Connected to MongoDB: {DATABASE_NAME}")
 
 
 async def close_db():
     global client
     if client:
         client.close()
-        print("🔌 MongoDB connection closed")
+        print("[OK] MongoDB connection closed")
 
 
 def get_db():

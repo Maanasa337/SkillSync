@@ -41,7 +41,8 @@ export default function EmployeeDashboard() {
           const res = await getCourseDetail(courseId);
           setCourseContent(res.data);
           setActiveCourse(courseId);
-      } catch (err) {
+      } catch (error) {
+          console.error(error);
           setActionMsg('Failed to load course details');
       }
   }
@@ -51,7 +52,8 @@ export default function EmployeeDashboard() {
           const res = await getAssessment(activeCourse);
           setActiveAssessment(res.data);
           setAnswers({});
-      } catch (err) {
+      } catch (error) {
+          console.error(error);
           setActionMsg('Failed to load assessment. Ensure you are authorized to take it.');
       }
   }
