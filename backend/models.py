@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 # ---- Auth Models ----
@@ -12,6 +12,9 @@ class RegisterRequest(BaseModel):
     company_name: Optional[str] = None  # required for admin registration
     job_role: Optional[str] = None
     training_start_date: Optional[str] = None
+    department: str = "HR"  # Production, Quality, Maintenance, HR
+    primary_language: str = "en"  # en, hi, ta
+    known_languages: list[str] = ["en"]  # subset of [en, hi, ta]
 
 
 
@@ -25,6 +28,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     name: str
+    primary_language: str = "en"
+    known_languages: list[str] = ["en"]
+    department: str = "HR"
 
 
 # ---- Employee Models ----
@@ -34,6 +40,10 @@ class AddEmployeeRequest(BaseModel):
     password: str
     job_role: str
     training_start_date: Optional[str] = None
+    date_of_joining: Optional[str] = None
+    department: str = "HR"
+    primary_language: str = "en"
+    known_languages: list[str] = ["en"]
 
 
 
@@ -51,10 +61,34 @@ class CourseCreate(BaseModel):
     duration_days: int = 0
 
 
+class MultilingualCourseCreate(BaseModel):
+    title: dict  # {"en": "", "hi": "", "ta": ""}
+    description: dict  # {"en": "", "hi": "", "ta": ""}
+    youtube_link: dict  # {"en": "", "hi": "", "ta": ""}
+    training_mode: str  # online, offline, self-paced, classroom
+    category: str
+
 
 class AssignCourseRequest(BaseModel):
     employee_id: str
     course_id: str
+
+
+class AssignIndividualRequest(BaseModel):
+    user_id: str
+    course_id: str
+    deadline_date: str  # ISO format datetime
+
+
+class AssignDepartmentRequest(BaseModel):
+    department: str
+    course_id: str
+    deadline_date: str
+
+
+class AssignAllRequest(BaseModel):
+    course_id: str
+    deadline_date: str
 
 
 class CompleteCourseRequest(BaseModel):
@@ -65,10 +99,23 @@ class AssessmentSubmitRequest(BaseModel):
     answers: list[int]
 
 
+class LanguageUpdateRequest(BaseModel):
+    selected_language: str  # en, hi, ta
+
 
 # ---- Incentive Models ----
 class IncentiveClaimRequest(BaseModel):
     incentive_id: str
+
+
+class AssignEmployeesToSchemeRequest(BaseModel):
+    employee_ids: list[str]
+
+
+# ---- Translation Models ----
+class TranslateRequest(BaseModel):
+    texts: list[str]
+    target_lang: str
 
 
 # ---- Response Helpers ----
@@ -80,4 +127,6 @@ class UserResponse(BaseModel):
     job_role: Optional[str] = None
     company_id: Optional[str] = None
     training_start_date: Optional[str] = None
-
+    department: Optional[str] = None
+    primary_language: Optional[str] = None
+    known_languages: Optional[list[str]] = None

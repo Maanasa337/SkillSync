@@ -3,9 +3,10 @@ uvicorn[standard]
 motor
 pymongo
 python-jose[cryptography]
-passlib[bcrypt]
-bcrypt
-python-multipart
-pydantic[email]
 passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
+python-multipart
+pydantic[email]
+httpx
+PyMuPDF
+python-pptx

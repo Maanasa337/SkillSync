@@ -8,6 +8,11 @@ from routes.employee_routes import router as employee_router
 from routes.course_routes import router as course_router
 from routes.assessment_routes import router as assessment_router
 from routes.scheme_routes import router as scheme_router
+from routes.assignment_routes import router as assignment_router
+from routes.translate_routes import router as translate_router
+from routers.chatbot import router as chatbot_router
+from routers.ai_routes import router as ai_router
+from routers.materials_routes import router as materials_router
 import asyncio
 
 @asynccontextmanager
@@ -24,6 +29,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS — must be added BEFORE routers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,11 +44,15 @@ app.include_router(employee_router)
 app.include_router(course_router)
 app.include_router(assessment_router)
 app.include_router(scheme_router)
-
+app.include_router(assignment_router)
+app.include_router(translate_router)
+app.include_router(chatbot_router)
+app.include_router(ai_router)
+app.include_router(materials_router)
 
 @app.get("/")
 async def root():
-    return {"message": "SkillSync API is running", "version": "1.0.0"}
+    return {"message": "SkillSync API is running", "version": "2.0.0"}
 
 @app.get("/seed")
 def run_seed():

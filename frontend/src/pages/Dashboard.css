@@ -693,3 +693,253 @@
   flex: 2;
   min-width: 300px;
 }
+
+/* ---- Rank Badges (Dept Drill-down) ---- */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 14px;
+}
+.rank-gold {
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+}
+.rank-silver {
+  background: linear-gradient(135deg, #C0C0C0, #A0A0A0);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(192, 192, 192, 0.4);
+}
+.rank-bronze {
+  background: linear-gradient(135deg, #CD7F32, #A0522D);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(205, 127, 50, 0.4);
+}
+.rank-default {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+
+/* ---- Dept Drill-down Card (clickable) ---- */
+.dept-card-clickable {
+  cursor: pointer;
+  transition: all var(--transition);
+  border: 2px solid transparent;
+}
+.dept-card-clickable:hover {
+  border-color: var(--accent-border);
+  transform: translateY(-3px);
+}
+.dept-card-clickable.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+/* ---- Filter Bar (Employees) ---- */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-lg);
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.filter-bar select,
+.filter-bar button {
+  padding: 8px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-white);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.filter-bar select:focus {
+  border-color: var(--primary-light);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.filter-bar .sort-toggle {
+  margin-left: auto;
+}
+.filter-bar .sort-toggle.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+/* ---- Loading Skeleton ---- */
+.skeleton-row {
+  display: flex;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+.skeleton-cell {
+  height: 16px;
+  background: linear-gradient(90deg, var(--border-light) 25%, var(--surface-hover) 50%, var(--border-light) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---- Incentive Expandable Panel ---- */
+.incentive-expand-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-top: var(--space-md);
+  padding: var(--space-lg);
+  animation: fadeSlideIn 0.3s ease;
+}
+.scheme-requirements {
+  display: flex;
+  gap: var(--space-xl);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--surface-hover);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-lg);
+}
+.scheme-requirements div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.scheme-requirements .req-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.scheme-requirements .req-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ---- Tab Bar (Incentive Panel) ---- */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border-light);
+  margin-bottom: var(--space-lg);
+}
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all var(--transition);
+}
+.tab-btn:hover {
+  color: var(--primary);
+}
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* ---- Multi-Select Dropdown ---- */
+.multi-select-container {
+  position: relative;
+  margin-bottom: var(--space-md);
+}
+.multi-select-search {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg-white);
+  outline: none;
+}
+.multi-select-search:focus {
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.multi-select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 10;
+  margin-top: 4px;
+}
+.multi-select-option {
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background var(--transition);
+}
+.multi-select-option:hover {
+  background: var(--surface-hover);
+}
+.multi-select-option.selected {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+}
+.selected-tag button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+/* ---- Experience Info (Employee Card) ---- */
+.emp-extra-info {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}

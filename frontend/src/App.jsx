@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LanguageProvider } from './context/LanguageContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AdminDashboard from './pages/AdminDashboard';
 import EmployeeDashboard from './pages/EmployeeDashboard';
+import ChatbotButton from './components/Chatbot/ChatbotButton';
 import './index.css';
 
 function ProtectedRoute({ children, role }) {
@@ -34,7 +36,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <LanguageProvider>
+          <AppRoutes />
+          <ChatbotButton />
+        </LanguageProvider>
       </AuthProvider>
     </BrowserRouter>
   );

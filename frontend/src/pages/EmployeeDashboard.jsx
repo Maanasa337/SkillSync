@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { getEmployeeDashboard, getCourseDetail, getAssessment, submitAssessment } from '../api';
-import { IconBook, IconTrendingUp, IconAward, IconAlertCircle, IconCheckCircle, IconClock, IconPlay, IconX, IconDownload } from '../components/Icons';
+import { getEmployeeDashboard, getCourseDetail, getAssessment, submitAssessment, getAIRecommendations, clearAIRecommendationsCache, getAIInsightsMe, clearAIInsightsCache, getCourseMaterials, getMaterialUrl, summarizeMaterial } from '../api';
+import { IconBook, IconTrendingUp, IconAward, IconAlertCircle, IconCheckCircle, IconClock, IconPlay, IconX, IconGlobe, IconDownload } from '../components/Icons';
+import { useLanguage } from '../context/LanguageContext';
 import './Dashboard.css';
+
+const LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'hi', label: 'हिन्दी (Hindi)' },
+  { code: 'ta', label: 'தமிழ் (Tamil)' },
+];
 
 export default function EmployeeDashboard() {
   const { user, logout } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [activeSection, setActiveSection] = useState('courses');
@@ -21,9 +29,20 @@ export default function EmployeeDashboard() {
   const [activeAssessment, setActiveAssessment] = useState(null);
   const [answers, setAnswers] = useState({});
 
+  // AI Features State
+  const [aiRecs, setAiRecs] = useState([]);
+  const [aiRecsLoading, setAiRecsLoading] = useState(false);
+  const [aiInsights, setAiInsights] = useState('');
+  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
+  // Course Materials State
+  const [courseMaterials, setCourseMaterials] = useState([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [summaryData, setSummaryData] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
   const fetchData = async () => {
     try {
-      const res = await getEmployeeDashboard();
+      const res = await getEmployeeDashboard(language);
       setData(res.data);
     } catch (err) {
       if (err.response?.status === 401) {
@@ -34,13 +53,62 @@ export default function EmployeeDashboard() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [language]);
+
+  // Fetch AI Recommendations
+  const fetchRecs = async () => {
+    setAiRecsLoading(true);
+    try {
+      const res = await getAIRecommendations();
+      setAiRecs(res.data.recommendations || []);
+    } catch (e) { console.error('AI recs error', e); }
+    setAiRecsLoading(false);
+  };
+  const refreshRecs = async () => {
+    setAiRecsLoading(true);
+    try {
+      await clearAIRecommendationsCache();
+      const res = await getAIRecommendations();
+      setAiRecs(res.data.recommendations || []);
+    } catch (e) { console.error('Refresh recs error', e); }
+    setAiRecsLoading(false);
+  };
+
+  // Fetch AI Insights
+  const fetchInsights = async () => {
+    setAiInsightsLoading(true);
+    try {
+      const res = await getAIInsightsMe();
+      setAiInsights(res.data.insights || '');
+    } catch (e) { console.error('AI insights error', e); }
+    setAiInsightsLoading(false);
+  };
+  const refreshInsights = async () => {
+    setAiInsightsLoading(true);
+    try {
+      await clearAIInsightsCache();
+      const res = await getAIInsightsMe();
+      setAiInsights(res.data.insights || '');
+    } catch (e) { console.error('Refresh insights error', e); }
+    setAiInsightsLoading(false);
+  };
+
+  useEffect(() => { fetchRecs(); }, []);
+  useEffect(() => { if (activeSection === 'progress') fetchInsights(); }, [activeSection]);
 
   const handleOpenCourse = async (courseId) => {
       try {
-          const res = await getCourseDetail(courseId);
+          const res = await getCourseDetail(courseId, language);
           setCourseContent(res.data);
           setActiveCourse(courseId);
+          // Also fetch materials
+          setMaterialsLoading(true);
+          setSummaryData(null);
+          try {
+            const matRes = await getCourseMaterials(courseId);
+            setCourseMaterials(matRes.data.materials || []);
+          } catch (e) { setCourseMaterials([]); }
+          setMaterialsLoading(false);
       } catch (error) {
           console.error(error);
           setActionMsg('Failed to load course details');
@@ -108,12 +176,12 @@ export default function EmployeeDashboard() {
 
   const { progress, courses, growth_insights, certificates, notifications } = data || {};
 
-  const navItems = [
-    { id: 'courses', icon: <IconBook size={20} />, label: 'My Courses' },
-    { id: 'progress', icon: <IconTrendingUp size={20} />, label: 'My Performance' },
-    { id: 'growth', icon: <IconAward size={20} />, label: 'Growth Insights' },
-    { id: 'certificates', icon: <IconCheckCircle size={20} />, label: 'Certificates' },
-    { id: 'notifications', icon: <IconAlertCircle size={20} />, label: 'Notifications' },
+    const navItems = [
+    { id: 'courses', icon: <IconBook size={20} />, label: t('nav.my_courses') },
+    { id: 'progress', icon: <IconTrendingUp size={20} />, label: t('nav.my_performance') },
+    { id: 'growth', icon: <IconAward size={20} />, label: t('nav.growth_insights') },
+    { id: 'certificates', icon: <IconCheckCircle size={20} />, label: t('nav.certificates') },
+    { id: 'notifications', icon: <IconAlertCircle size={20} />, label: t('nav.notifications') },
   ];
 
   // If in assessment mode
@@ -123,8 +191,8 @@ export default function EmployeeDashboard() {
         <div className="dashboard-layout" style={{background: 'var(--bg)', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '40px'}}>
              <div style={{width: '800px', maxWidth: '95vw', background: 'var(--surface)', padding: '40px', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)'}}>
                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '1px solid var(--border-light)', paddingBottom: '20px'}}>
-                     <h2>{courseContent?.title} - Final Assessment</h2>
-                     <button className="btn btn-outline" onClick={() => setActiveAssessment(null)}>Exit Assessment</button>
+                     <h2>{courseContent?.title} - {t('courses.final_assessment')}</h2>
+                     <button className="btn btn-outline" onClick={() => setActiveAssessment(null)}>{t('courses.exit_assessment')}</button>
                  </div>
                  
                  {actionMsg && <div className="toast" style={{marginBottom: "20px", position: "relative", alignSelf: "stretch"}}>{actionMsg}</div>}
@@ -167,7 +235,7 @@ export default function EmployeeDashboard() {
                         onClick={handleSubmitAssessment}
                         disabled={Object.keys(answers).length < qCount}
                      >
-                         Submit Assessment ({Object.keys(answers).length} / {qCount})
+                         {t('courses.submit_assessment')} ({Object.keys(answers).length} / {qCount})
                      </button>
                  </div>
              </div>
@@ -182,11 +250,11 @@ export default function EmployeeDashboard() {
             <div style={{width: '900px', maxWidth: '95vw', background: 'var(--surface)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-lg)'}}>
                 <div style={{padding: '30px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--primary)', color: 'white'}}>
                      <div>
-                         <span className="badge" style={{background: 'rgba(255,255,255,0.2)', color: 'white', marginBottom: '10px'}}>{courseContent.category}</span>
+                         <span className="badge" style={{background: 'rgba(255,255,255,0.2)', color: 'white', marginBottom: '10px'}}>{t(`departments.${courseContent.category}`) !== `departments.${courseContent.category}` ? t(`departments.${courseContent.category}`) : courseContent.category}</span>
                          <h1 style={{fontSize: '24px', margin: 0}}>{courseContent.title}</h1>
                      </div>
                      <button className="btn btn-outline" style={{borderColor: 'rgba(255,255,255,0.3)', color: 'white'}} onClick={() => {setActiveCourse(null); setCourseContent(null)}}>
-                         <IconX /> Close
+                         <IconX /> {t('assignment.cancel') || 'Close'}
                      </button>
                 </div>
                 
@@ -196,7 +264,12 @@ export default function EmployeeDashboard() {
                     {/* YouTube Embed */}
                     <div className="video-container" style={{position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', background: '#000'}}>
                         <iframe 
-                            src={courseContent.youtube_url} 
+                            src={(() => {
+                                const url = courseContent.youtube_link;
+                                if (!url) return '';
+                                const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+                                return match ? `https://www.youtube.com/embed/${match[1]}` : url;
+                            })()} 
                             style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0}}
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                             allowFullScreen
@@ -207,10 +280,10 @@ export default function EmployeeDashboard() {
 
                 <div className="course-detail-body">
                      <div className="course-detail-content">
-                         <h3 style={{marginBottom: '15px'}}>Content Overview</h3>
+                         <h3 style={{marginBottom: '15px'}}>{t('courses.content_overview')}</h3>
                          <p style={{color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '30px'}}>{courseContent.description}</p>
                          
-                         <h3 style={{marginBottom: '15px'}}>Skills Acquired</h3>
+                         <h3 style={{marginBottom: '15px'}}>{t('courses.skills_acquired')}</h3>
                          <ul style={{listStyle: 'none', padding: 0, display: 'flex', flexWrap: 'wrap', gap: '10px'}}>
                              {courseContent.skills.map((skill, i) => (
                                  <li key={i} style={{padding: '8px 16px', background: 'var(--surface-hover)', borderRadius: 'var(--radius-full)', fontSize: '14px', color: 'var(--text)', border: '1px solid var(--border)'}}>
@@ -221,20 +294,78 @@ export default function EmployeeDashboard() {
                      </div>
                      
                      <div className="course-detail-meta">
-                         <h4 style={{marginBottom: '20px'}}>Training Meta</h4>
+                         <h4 style={{marginBottom: '20px'}}>{t('courses.training_meta')}</h4>
                          <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', color: 'var(--text-secondary)'}}>
                              <IconClock size={18} />
-                             <span>{courseContent.duration_minutes} minutes video</span>
+                             <span>{courseContent.duration_minutes} {t('courses.minutes_video')}</span>
                          </div>
                          <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '25px', color: 'var(--text-secondary)'}}>
                              <IconBook size={18} />
-                             <span>{courseContent.duration_days} days training equiv.</span>
+                             <span>{courseContent.duration_days} {t('courses.days_training')}</span>
                          </div>
                          
                          <button className="btn btn-primary" style={{width: '100%', padding: '14px'}} onClick={handleStartAssessment}>
-                             Proceed to Assessment
+                             {t('courses.proceed_assessment')}
                          </button>
                      </div>
+                </div>
+
+                {/* Course Materials Section */}
+                <div style={{padding: '25px 40px', borderTop: '1px solid var(--border-light)'}}>
+                  <h3 style={{marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px'}}>
+                    <IconDownload size={20} /> {t('materials.course_materials')}
+                  </h3>
+                  {materialsLoading ? (
+                    <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>Loading...</p>
+                  ) : courseMaterials.length > 0 ? (
+                    <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                      {courseMaterials.map((mat, idx) => {
+                        const isPdfOrPptx = mat.filename?.toLowerCase().endsWith('.pdf') || mat.filename?.toLowerCase().endsWith('.pptx');
+                        return (
+                          <div key={idx} style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)'}}>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                              <span style={{fontSize: '20px'}}>{mat.content_type?.includes('pdf') ? '📄' : mat.content_type?.includes('video') ? '🎬' : mat.content_type?.includes('presentation') ? '📊' : '📁'}</span>
+                              <div>
+                                <p style={{fontWeight: 500, fontSize: '14px', margin: 0}}>{mat.filename}</p>
+                                <p style={{fontSize: '11px', color: 'var(--text-tertiary)', margin: 0}}>{(mat.file_size / 1024).toFixed(0)} KB · {mat.language === 'all' ? t('materials.all_languages') : mat.language}</p>
+                              </div>
+                            </div>
+                            <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                              {isPdfOrPptx && (
+                                <button className="btn btn-outline btn-sm" onClick={async () => {
+                                  setSummaryLoading(true); setSummaryData(null);
+                                  try {
+                                    const res = await summarizeMaterial(mat.file_id, language);
+                                    setSummaryData(res.data);
+                                  } catch(e) { setActionMsg('Failed to summarize'); }
+                                  setSummaryLoading(false);
+                                }} disabled={summaryLoading}>
+                                  {summaryLoading ? t('ai.summarizing') : t('ai.summarize_with_ai')}
+                                </button>
+                              )}
+                              <a href={getMaterialUrl(mat.file_id)} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
+                                <IconDownload size={14} /> {t('materials.view_download')}
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* AI Summary Display */}
+                      {summaryData && summaryData.summary?.length > 0 && (
+                        <div style={{marginTop: '10px', padding: '16px', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: 'var(--radius-md)'}}>
+                          <h4 style={{fontSize: '13px', color: 'var(--accent)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px'}}>✨ {t('ai.summarized_by_ai')} — {summaryData.filename}</h4>
+                          <ul style={{margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px'}}>
+                            {summaryData.summary.map((bullet, i) => (
+                              <li key={i} style={{fontSize: '13px', color: 'var(--text)', lineHeight: 1.5}}>{bullet}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>{t('materials.no_materials')}</p>
+                  )}
                 </div>
             </div>
         </div>
@@ -252,14 +383,14 @@ export default function EmployeeDashboard() {
               <rect width="40" height="40" rx="8" fill="var(--primary)"/>
               <path d="M12 20L18 26L28 14" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span>SkillSync</span>
+            <span>{t('app_name')}</span>
           </div>
         </div>
         <div className="sidebar-user" style={{ marginBottom: "2rem" }}>
             <div className="avatar">{user?.name?.charAt(0) || 'E'}</div>
             <div>
               <p className="sidebar-name">{user?.name}</p>
-              <p className="sidebar-role">Apprentice</p>
+              <p className="sidebar-role">{t('dashboard.apprentice')}</p>
             </div>
         </div>
         <nav className="sidebar-nav">
@@ -276,7 +407,7 @@ export default function EmployeeDashboard() {
         </nav>
         <button className="nav-item logout-btn" onClick={() => { logout(); navigate('/login'); }}>
           <span className="nav-icon"><IconAlertCircle size={20} /></span>
-          <span>Sign Out</span>
+          <span>{t('nav.sign_out')}</span>
         </button>
       </aside>
 
@@ -284,10 +415,22 @@ export default function EmployeeDashboard() {
       <main className="main-content">
         <header className="main-header">
           <div>
-            <h1>Learning Portal</h1>
-            <p>Welcome, {user?.name}</p>
+            <h1>{t('dashboard.employee_title')}</h1>
+            <p>{t('dashboard.welcome')}, {user?.name}</p>
           </div>
-          {actionMsg && <div className="toast">{actionMsg}</div>}
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--text-secondary)' }}>
+              <IconGlobe size={18} />
+              <select 
+                value={language} 
+                onChange={(e) => setLanguage(e.target.value)}
+                style={{ padding: '6px 12px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--surface)', cursor: 'pointer' }}
+              >
+                {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+              </select>
+            </div>
+            {actionMsg && <div className="toast">{actionMsg}</div>}
+          </div>
         </header>
 
         <div className="dashboard-content">
@@ -295,17 +438,17 @@ export default function EmployeeDashboard() {
           {activeSection === 'courses' && (
             <section className="fade-in">
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px'}}>
-                  <h2 className="section-title" style={{margin: 0}}>Training Modules</h2>
+                  <h2 className="section-title" style={{margin: 0}}>{t('courses.training_modules')}</h2>
               </div>
               
-              <h3 className="subsection-title" style={{marginTop: '10px', color: 'var(--primary)'}}>Mandatory / Basic</h3>
+              <h3 className="subsection-title" style={{marginTop: '10px', color: 'var(--primary)'}}>{t('courses.mandatory')}</h3>
               <div className="course-grid" style={{marginBottom: '40px'}}>
                 {(courses || []).filter(c => c.type === 'mandatory').map(course => (
                   <div key={course.course_id} className="card course-card">
                     <div className="course-header">
-                      <span className="course-category" style={{color: 'var(--primary)', background: 'var(--primary-bg)', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: 600}}>{course.category}</span>
+                      <span className="course-category" style={{color: 'var(--primary)', background: 'var(--primary-bg)', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: 600}}>{t(`departments.${course.category}`) !== `departments.${course.category}` ? t(`departments.${course.category}`) : course.category}</span>
                       <span className={`badge ${course.status === 'completed' ? 'badge-success' : course.status === 'in_progress' ? 'badge-warning' : 'badge-primary'}`}>
-                        {course.status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        {t(`status.${course.status}`) !== `status.${course.status}` ? t(`status.${course.status}`) : course.status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
                     </div>
                     <h4 style={{fontSize: '18px', margin: '15px 0 5px 0'}}>{course.title}</h4>
@@ -316,27 +459,27 @@ export default function EmployeeDashboard() {
                     
                     <div className="course-footer" style={{borderTop: '1px solid var(--border-light)', paddingTop: '15px', display: 'flex', flexDirection: 'column', gap: '15px'}}>
                       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', fontSize: '12px', color: 'var(--text-secondary)'}}>
-                         <span><IconClock size={14} style={{verticalAlign: 'text-bottom'}}/> {course.duration_minutes || 0} mins</span>
-                         {course.status === 'completed' && <span className="course-score" style={{color: 'var(--success)', fontWeight: 600}}>Score: {course.score}%</span>}
+                         <span><IconClock size={14} style={{verticalAlign: 'text-bottom'}}/> {course.duration_minutes || 0} {t('courses.mins')}</span>
+                         {course.status === 'completed' && <span className="course-score" style={{color: 'var(--success)', fontWeight: 600}}>{t('courses.score')}: {course.score}%</span>}
                       </div>
 
                       <button className={`btn ${course.status === 'completed' ? 'btn-outline' : 'btn-primary'} btn-sm`} style={{width: '100%', justifyContent: 'center'}} onClick={() => handleOpenCourse(course.course_id)}>
-                        <IconPlay size={16} /> {course.status === 'completed' ? 'Re-watch Training' : course.status === 'in_progress' ? 'Resume Training' : 'Start Training'}
+                        <IconPlay size={16} /> {course.status === 'completed' ? t('courses.rewatch') : course.status === 'in_progress' ? t('courses.resume_training') : t('courses.start_training')}
                       </button>
                     </div>
                   </div>
                 ))}
-                {(courses || []).filter(c => c.type === 'mandatory').length === 0 && <p className="empty-state">No mandatory courses assigned.</p>}
+                {(courses || []).filter(c => c.type === 'mandatory').length === 0 && <p className="empty-state">{t('courses.no_mandatory')}</p>}
               </div>
 
-              <h3 className="subsection-title" style={{marginTop: '10px', color: 'var(--primary)'}}>Role-Specific</h3>
+              <h3 className="subsection-title" style={{marginTop: '10px', color: 'var(--primary)'}}>{t('courses.role_specific')}</h3>
               <div className="course-grid">
                 {(courses || []).filter(c => c.type !== 'mandatory').map(course => (
                   <div key={course.course_id} className="card course-card">
                     <div className="course-header">
-                      <span className="course-category" style={{color: 'var(--primary)', background: 'var(--primary-bg)', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: 600}}>{course.category}</span>
+                      <span className="course-category" style={{color: 'var(--primary)', background: 'var(--primary-bg)', padding: '4px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: 600}}>{t(`departments.${course.category}`) !== `departments.${course.category}` ? t(`departments.${course.category}`) : course.category}</span>
                       <span className={`badge ${course.status === 'completed' ? 'badge-success' : course.status === 'in_progress' ? 'badge-warning' : 'badge-primary'}`}>
-                        {course.status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        {t(`status.${course.status}`) !== `status.${course.status}` ? t(`status.${course.status}`) : course.status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
                     </div>
                     <h4 style={{fontSize: '18px', margin: '15px 0 5px 0'}}>{course.title}</h4>
@@ -347,17 +490,48 @@ export default function EmployeeDashboard() {
                     
                     <div className="course-footer" style={{borderTop: '1px solid var(--border-light)', paddingTop: '15px', display: 'flex', flexDirection: 'column', gap: '15px'}}>
                       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', fontSize: '12px', color: 'var(--text-secondary)'}}>
-                         <span><IconClock size={14} style={{verticalAlign: 'text-bottom'}}/> {course.duration_minutes || 0} mins</span>
-                         {course.status === 'completed' && <span className="course-score" style={{color: 'var(--success)', fontWeight: 600}}>Score: {course.score}%</span>}
+                         <span><IconClock size={14} style={{verticalAlign: 'text-bottom'}}/> {course.duration_minutes || 0} {t('courses.mins')}</span>
+                         {course.status === 'completed' && <span className="course-score" style={{color: 'var(--success)', fontWeight: 600}}>{t('courses.score')}: {course.score}%</span>}
                       </div>
 
                       <button className={`btn ${course.status === 'completed' ? 'btn-outline' : 'btn-primary'} btn-sm`} style={{width: '100%', justifyContent: 'center'}} onClick={() => handleOpenCourse(course.course_id)}>
-                        <IconPlay size={16} /> {course.status === 'completed' ? 'Re-watch Training' : course.status === 'in_progress' ? 'Resume Training' : 'Start Training'}
+                        <IconPlay size={16} /> {course.status === 'completed' ? t('courses.rewatch') : course.status === 'in_progress' ? t('courses.resume_training') : t('courses.start_training')}
                       </button>
                     </div>
                   </div>
                 ))}
-                {(courses || []).filter(c => c.type !== 'mandatory').length === 0 && <p className="empty-state">No role-specific courses assigned.</p>}
+                {(courses || []).filter(c => c.type !== 'mandatory').length === 0 && <p className="empty-state">{t('courses.no_role_specific')}</p>}
+              </div>
+
+              {/* AI Recommendations Card */}
+              <div style={{marginTop: '30px'}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
+                  <h2 className="section-title" style={{margin: 0}}>✨ {t('ai.recommended_for_you')}</h2>
+                  <button className="btn btn-outline btn-sm" onClick={refreshRecs} disabled={aiRecsLoading}>
+                    {aiRecsLoading ? '...' : t('ai.refresh_recommendations')}
+                  </button>
+                </div>
+                {aiRecsLoading ? (
+                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>{t('ai.loading_recommendations')}</p>
+                ) : aiRecs.length > 0 ? (
+                  <div className="course-grid">
+                    {aiRecs.map((rec, i) => (
+                      <div key={i} className="card course-card" style={{borderTop: '3px solid var(--accent)'}}>
+                        <div className="course-header">
+                          <span className="badge badge-success">{t('ai.ai_recommended')}</span>
+                          <span className="badge badge-primary">{t(`training_modes.${rec.training_mode}`) !== `training_modes.${rec.training_mode}` ? t(`training_modes.${rec.training_mode}`) : rec.training_mode}</span>
+                        </div>
+                        <h4 style={{fontSize: '16px', margin: '12px 0 8px 0'}}>{rec.title}</h4>
+                        <p style={{fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '15px', lineHeight: 1.5}}>{rec.reason}</p>
+                        <button className="btn btn-accent btn-sm" style={{width: '100%', justifyContent: 'center'}} onClick={() => handleOpenCourse(rec.course_id)}>
+                          <IconPlay size={14} /> {t('ai.view_course')}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>{t('ai.no_recommendations')}</p>
+                )}
               </div>
 
             </section>
@@ -366,39 +540,59 @@ export default function EmployeeDashboard() {
           {/* My Progress / Performance */}
           {activeSection === 'progress' && (
             <section className="fade-in">
-              <h2 className="section-title">My Performance</h2>
+              <h2 className="section-title">{t('performance.title')}</h2>
               <div className="overview-grid three-col">
                 <div className="stat-card">
                   <div className="stat-icon" style={{ background: 'var(--primary-bg)', color: 'var(--primary)' }}><IconTrendingUp /></div>
                   <div>
                     <p className="stat-value">{progress?.completion_pct || 0}%</p>
-                    <p className="stat-label">Completion</p>
+                    <p className="stat-label">{t('performance.completion')}</p>
                   </div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-icon" style={{ background: 'var(--accent-bg)', color: 'var(--accent)' }}><IconAward /></div>
                   <div>
                     <p className="stat-value">{progress?.avg_score || 0}%</p>
-                    <p className="stat-label">Total Avg Score</p>
+                    <p className="stat-label">{t('performance.total_avg_score')}</p>
                   </div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-icon" style={{ background: 'var(--success-bg)', color: 'var(--success)' }}><IconCheckCircle /></div>
                   <div>
                     <p className="stat-value">{progress?.completed || 0}/{progress?.total_courses || 0}</p>
-                    <p className="stat-label">Modules Passed</p>
+                    <p className="stat-label">{t('performance.modules_passed')}</p>
                   </div>
                 </div>
               </div>
 
               <div className="card progress-detail-card" style={{ marginTop: 'var(--space-xl)' }}>
-                <h3>Overall Progress Vector</h3>
+                <h3>{t('performance.progress_vector')}</h3>
                 <div className="big-progress">
                   <div className="progress-bar-track" style={{ height: '14px' }}>
                     <div className="progress-bar-fill" style={{ width: `${progress?.completion_pct || 0}%` }} />
                   </div>
-                  <span className="big-progress-label">{progress?.completion_pct || 0}% Complete</span>
+                  <span className="big-progress-label">{progress?.completion_pct || 0}% {t('performance.complete')}</span>
                 </div>
+              </div>
+
+              {/* AI Performance Insights */}
+              <div className="card" style={{marginTop: 'var(--space-xl)', padding: 'var(--space-lg)'}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
+                  <h3 style={{display: 'flex', alignItems: 'center', gap: '8px'}}>✨ {t('ai.performance_insights')}</h3>
+                  <button className="btn btn-outline btn-sm" onClick={refreshInsights} disabled={aiInsightsLoading}>
+                    {aiInsightsLoading ? '...' : t('ai.regenerate')}
+                  </button>
+                </div>
+                {aiInsightsLoading ? (
+                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>Analyzing...</p>
+                ) : aiInsights ? (
+                  <div style={{whiteSpace: 'pre-line', fontSize: '14px', lineHeight: 1.7, color: 'var(--text-secondary)'}}>
+                    {aiInsights}
+                  </div>
+                ) : (
+                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>No insights available yet.</p>
+                )}
+                <p style={{fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '12px'}}>{t('ai.generated_by_ai')}</p>
               </div>
             </section>
           )}
@@ -406,7 +600,7 @@ export default function EmployeeDashboard() {
           {/* Growth Insights */}
           {activeSection === 'growth' && (
             <section className="fade-in">
-              <h2 className="section-title">Growth Trajectory</h2>
+              <h2 className="section-title">{t('growth.title')}</h2>
               {(growth_insights || []).length > 0 ? (
                 <div className="insights-grid">
                   {growth_insights.map((insight, i) => (
@@ -425,8 +619,8 @@ export default function EmployeeDashboard() {
               ) : (
                 <div className="card empty-insights">
                   <div style={{color: 'var(--text-tertiary)', marginBottom: '15px'}}><IconAward size={40} /></div>
-                  <h3>Keep Learning!</h3>
-                  <p>Pass more assessment modules to unlock specialized engineering and management tracks.</p>
+                  <h3>{t('growth.keep_learning')}</h3>
+                  <p>{t('growth.keep_learning_msg')}</p>
                 </div>
               )}
             </section>
@@ -435,28 +629,28 @@ export default function EmployeeDashboard() {
           {/* Certificates */}
           {activeSection === 'certificates' && (
             <section className="fade-in">
-              <h2 className="section-title">Verified Credentials</h2>
+              <h2 className="section-title">{t('certs.title')}</h2>
               {(certificates || []).length > 0 ? (
                 <div className="cert-grid">
                   {certificates.map((cert, i) => (
                     <div key={i} className="card cert-card" style={{borderTop: '4px solid var(--accent)'}}>
                       <div className="cert-badge" style={{fontSize: '30px', marginBottom: '15px'}}><IconAward size={36} className="text-accent" /></div>
                       <h4 style={{fontSize: '16px', marginBottom: '10px'}}>{cert.title}</h4>
-                      <p className="cert-date" style={{fontSize: '13px', color: 'var(--text-secondary)'}}>Issued: {cert.completion_date ? new Date(cert.completion_date).toLocaleDateString() : 'N/A'}</p>
-                      <p className="cert-score" style={{fontSize: '13px', marginBottom: '20px', color: 'var(--text-secondary)'}}>Verified Score: <strong style={{color: 'var(--text)'}}>{cert.score}%</strong></p>
+                      <p className="cert-date" style={{fontSize: '13px', color: 'var(--text-secondary)'}}>{t('certs.issued')}: {cert.completion_date ? new Date(cert.completion_date).toLocaleDateString() : 'N/A'}</p>
+                      <p className="cert-score" style={{fontSize: '13px', marginBottom: '20px', color: 'var(--text-secondary)'}}>{t('certs.verified_score')}: <strong style={{color: 'var(--text)'}}>{cert.score}%</strong></p>
                       <button className="btn btn-outline btn-sm" style={{width: '100%', justifyContent: 'center'}} onClick={() => {
                         const el = document.createElement('a');
                         el.setAttribute('href', 'data:text/plain,Official%20Training%20Credential%20for%20' + encodeURIComponent(cert.title) + '%0A%0AThis%20document%20certifies%20completion%20with%20a%20passing%20score%20of%20' + cert.score + '%25.');
                         el.setAttribute('download', `${cert.title.replace(/\s+/g,'_')}_credential.txt`);
                         el.click();
                       }}>
-                        <IconDownload size={16} /> Export Credential
+                        <IconDownload size={16} /> {t('certs.export')}
                       </button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="empty-state">No credentials earned yet. Pass assessments to earn official certificates.</p>
+                <p className="empty-state">{t('certs.no_certs')}</p>
               )}
             </section>
           )}
@@ -464,7 +658,7 @@ export default function EmployeeDashboard() {
           {/* Notifications */}
           {activeSection === 'notifications' && (
             <section className="fade-in">
-              <h2 className="section-title">Inbox</h2>
+              <h2 className="section-title">{t('notif.title')}</h2>
               {(notifications || []).length > 0 ? (
                 <div className="notif-list">
                   {notifications.map((notif, i) => (
@@ -475,14 +669,14 @@ export default function EmployeeDashboard() {
                       <div>
                         <p className="notif-msg" style={{fontWeight: 500, margin: '0 0 8px 0'}}>{notif.message}</p>
                         <span className={`badge ${notif.type === 'deadline' ? 'badge-warning' : 'badge-primary'}`}>
-                          {notif.type === 'deadline' ? 'Pending Requirement' : 'New Module'}
+                          {notif.type === 'deadline' ? t('notif.pending_requirement') : t('notif.new_module')}
                         </span>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="empty-state">All caught up! No required actions.</p>
+                <p className="empty-state">{t('notif.all_caught_up')}</p>
               )}
             </section>
           )}
