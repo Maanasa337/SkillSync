@@ -24,6 +24,36 @@ def resolve_lang(field, lang: str = "en") -> str:
         return val or ""
     return field or ""
 
+async def resolve_and_translate(field, lang: str = "en") -> str:
+    """Resolve a multilingual field. Translate dynamically if target lang is missing."""
+    if isinstance(field, dict):
+        val = field.get(lang, "")
+        if val: return val
+        
+        # fallback to English
+        en_val = field.get("en", "")
+        if not en_val:
+            for v in field.values():
+                if v:
+                    en_val = v
+                    break
+        
+        # dynamically translate the fallback
+        if en_val and lang != "en":
+            try:
+                return await translate(en_val, "en", lang)
+            except:
+                pass
+        return en_val or ""
+    
+    # if it's a string
+    if field and lang != "en":
+        try:
+            return await translate(field, "en", lang)
+        except:
+            pass
+    return field or ""
+
 
 @router.post("/courses")
 async def create_course(req: MultilingualCourseCreate, user=Depends(require_role("admin"))):
@@ -70,10 +100,10 @@ async def get_all_courses(lang: Optional[str] = Query(default="en")):
         translated_skills = await translate_skills(c.get("skills", []), lang)
         result.append({
             "id": str(c["_id"]),
-            "title": resolve_lang(c.get("title", ""), lang),
+            "title": await resolve_and_translate(c.get("title", ""), lang),
             "category": c.get("category", ""),
             "type": c.get("type", "mandatory"),
-            "description": resolve_lang(c.get("description", ""), lang),
+            "description": await resolve_and_translate(c.get("description", ""), lang),
             "skills": translated_skills,
             "duration_minutes": c.get("duration_minutes", 0),
             "linked_scheme": c.get("linked_scheme"),
@@ -105,10 +135,10 @@ async def get_course_detail(course_id: str, lang: Optional[str] = Query(default=
 
     return {
         "id": str(course["_id"]),
-        "title": resolve_lang(course.get("title", ""), lang),
+        "title": await resolve_and_translate(course.get("title", ""), lang),
         "category": course.get("category", ""),
         "type": course.get("type", "mandatory"),
-        "description": resolve_lang(course.get("description", ""), lang),
+        "description": await resolve_and_translate(course.get("description", ""), lang),
         "skills": skills,
         "youtube_link": resolve_lang(course.get("youtube_link", ""), lang),
         "duration_minutes": course.get("duration_minutes", 0),

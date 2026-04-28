@@ -1,14 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
 from models import AssessmentSubmitRequest
 from auth import require_role
 from database import get_db
 from bson import ObjectId
 from datetime import datetime
+from utils.bhashini import translate
+import asyncio
 
 router = APIRouter(tags=["Assessment"])
 
 @router.get("/assessments/{course_id}")
-async def get_assessment(course_id: str, user=Depends(require_role("employee"))):
+async def get_assessment(course_id: str, lang: Optional[str] = Query(default="en"), user=Depends(require_role("employee"))):
     db = get_db()
     
     # Check if course is assigned to user
@@ -26,11 +29,24 @@ async def get_assessment(course_id: str, user=Depends(require_role("employee")))
         
     # Return questions without the correct answers
     safe_questions = []
-    for q in assessment["questions"]:
-        safe_questions.append({
-            "question": q["question"],
-            "options": q["options"]
-        })
+    
+    async def translate_q(q):
+        try:
+            t_q = await translate(q["question"], "en", lang) if lang != "en" else q["question"]
+            t_opts = await asyncio.gather(*(translate(o, "en", lang) for o in q["options"])) if lang != "en" else q["options"]
+            return {"question": t_q, "options": list(t_opts)}
+        except Exception:
+            return {"question": q["question"], "options": q["options"]}
+
+    if lang != "en":
+        safe_questions = await asyncio.gather(*(translate_q(q) for q in assessment["questions"]))
+        safe_questions = list(safe_questions)
+    else:
+        for q in assessment["questions"]:
+            safe_questions.append({
+                "question": q["question"],
+                "options": q["options"]
+            })
         
     return {"questions": safe_questions}
 

@@ -92,7 +92,9 @@ export default function AdminDashboard() {
   const [empForm, setEmpForm] = useState({ name: '', email: '', password: '', job_role: '', department: 'Production', primary_language: 'en', known_languages: ['en'] });
 
   const [assignTab, setAssignTab] = useState('individual');
-  const [assignForm, setAssignForm] = useState({ course_id: '', employee_id: '', department: 'Production', deadline_date: '' });
+  const [assignForm, setAssignForm] = useState({ course_id: '', employee_ids: [], department: 'Production', deadline_date: '' });
+  const [assignIndividualSearchTerm, setAssignIndividualSearchTerm] = useState('');
+  const [showAssignIndividualDropdown, setShowAssignIndividualDropdown] = useState(false);
 
   const [createForm, setCreateForm] = useState({
     title: { en: '', hi: '', ta: '' },
@@ -235,12 +237,16 @@ export default function AdminDashboard() {
 
     try {
       if (assignTab === 'individual') {
-        if (!assignForm.employee_id) return;
-        await assignIndividual({
-          user_id: assignForm.employee_id,
-          course_id: assignForm.course_id,
-          deadline_date: new Date(assignForm.deadline_date).toISOString()
-        });
+        if (!assignForm.employee_ids || assignForm.employee_ids.length === 0) return;
+        await Promise.all(
+          assignForm.employee_ids.map((emp) => 
+            assignIndividual({
+              user_id: emp.id,
+              course_id: assignForm.course_id,
+              deadline_date: new Date(assignForm.deadline_date).toISOString()
+            })
+          )
+        );
       } else if (assignTab === 'department') {
         await assignDepartment({
           department: assignForm.department,
@@ -255,7 +261,8 @@ export default function AdminDashboard() {
         });
       }
       setShowAssignCourse(false);
-      setAssignForm({ ...assignForm, course_id: '', employee_id: '' });
+      setAssignForm({ ...assignForm, course_id: '', employee_ids: [] });
+      setAssignIndividualSearchTerm('');
       setActionMsg('Training module dispatched with deadlines!');
       fetchData();
       setTimeout(() => setActionMsg(''), 3000);
@@ -1031,10 +1038,54 @@ export default function AdminDashboard() {
               {assignTab === 'individual' && (
                 <div className="input-group" style={{ marginBottom: "20px" }}>
                   <label>{t('assignment.personnel_selection')}</label>
-                  <select value={assignForm.employee_id} onChange={e => setAssignForm({ ...assignForm, employee_id: e.target.value })} required>
-                    <option value="">{t('assignment.select_an_employee')}</option>
-                    {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name} ({emp.job_role})</option>)}
-                  </select>
+                  <div className="multi-select-container">
+                    <input
+                      className="multi-select-search"
+                      type="text"
+                      placeholder={t('assignment.select_an_employee')}
+                      value={assignIndividualSearchTerm}
+                      onChange={(e) => { setAssignIndividualSearchTerm(e.target.value); setShowAssignIndividualDropdown(true); }}
+                      onFocus={() => setShowAssignIndividualDropdown(true)}
+                    />
+                    {showAssignIndividualDropdown && assignIndividualSearchTerm && (
+                      <div className="multi-select-dropdown">
+                        {employees
+                          .filter(emp => {
+                            const alreadySelected = assignForm.employee_ids.map(s => s.id);
+                            return !alreadySelected.includes(emp.id) &&
+                              emp.name.toLowerCase().includes(assignIndividualSearchTerm.toLowerCase());
+                          })
+                          .slice(0, 10)
+                          .map(emp => (
+                            <div key={emp.id} className="multi-select-option"
+                              onClick={() => {
+                                setAssignForm(prev => ({...prev, employee_ids: [...prev.employee_ids, emp]}));
+                                setAssignIndividualSearchTerm('');
+                                setShowAssignIndividualDropdown(false);
+                              }}>
+                              {emp.name} — {emp.department}
+                            </div>
+                          ))
+                        }
+                        {employees.filter(emp => {
+                          const alreadySelected = assignForm.employee_ids.map(s => s.id);
+                          return !alreadySelected.includes(emp.id) && emp.name.toLowerCase().includes(assignIndividualSearchTerm.toLowerCase());
+                        }).length === 0 && (
+                            <div style={{ padding: "10px 14px", color: "var(--text-tertiary)", fontSize: "13px" }}>No matching employees found</div>
+                          )}
+                      </div>
+                    )}
+                    {assignForm.employee_ids.length > 0 && (
+                      <div className="selected-tags">
+                        {assignForm.employee_ids.map(emp => (
+                          <span key={emp.id} className="selected-tag">
+                            {emp.name}
+                            <button type="button" onClick={() => setAssignForm(prev => ({...prev, employee_ids: prev.employee_ids.filter(s => s.id !== emp.id)}))}>×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
