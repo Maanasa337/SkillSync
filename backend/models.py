@@ -112,6 +112,34 @@ class AssignEmployeesToSchemeRequest(BaseModel):
     employee_ids: list[str]
 
 
+# ---- Course Update (single-language with auto-translate) ----
+class CourseUpdateRequest(BaseModel):
+    title: str
+    description: str
+    youtube_link: str = ""
+    skills: list[str] = []
+    duration_minutes: int = 0
+    source_lang: str = "en"  # the language the admin filled in
+    training_mode: str = "online"
+    category: str = "Safety"
+
+
+# ---- Employee Update ----
+class EmployeeUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    job_role: Optional[str] = None
+    department: Optional[str] = None
+    primary_language: Optional[str] = None
+
+
+# ---- AI Generate Course Fields ----
+class AIGenerateRequest(BaseModel):
+    title: str
+    description: str = ""
+    source_lang: str = "en"
+
+
 # ---- Translation Models ----
 class TranslateRequest(BaseModel):
     texts: list[str]

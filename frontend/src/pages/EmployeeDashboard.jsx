@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { getEmployeeDashboard, getCourseDetail, getAssessment, submitAssessment, getAIRecommendations, clearAIRecommendationsCache, getAIInsightsMe, clearAIInsightsCache, getCourseMaterials, getMaterialUrl, summarizeMaterial } from '../api';
+import { getEmployeeDashboard, getCourseDetail, getAssessment, submitAssessment, getAssessmentReview, getAssessmentReviewInsight, clearAssessmentReviewInsightCache, getCourseMaterials, getMaterialUrl, summarizeMaterial } from '../api';
 import { IconBook, IconTrendingUp, IconAward, IconAlertCircle, IconCheckCircle, IconClock, IconPlay, IconX, IconGlobe, IconDownload } from '../components/Icons';
 import { useLanguage } from '../context/LanguageContext';
 import './Dashboard.css';
@@ -29,11 +29,12 @@ export default function EmployeeDashboard() {
   const [activeAssessment, setActiveAssessment] = useState(null);
   const [answers, setAnswers] = useState({});
 
-  // AI Features State
-  const [aiRecs, setAiRecs] = useState([]);
-  const [aiRecsLoading, setAiRecsLoading] = useState(false);
-  const [aiInsights, setAiInsights] = useState('');
-  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
+  // Assessment Review State
+  const [expandedReviewId, setExpandedReviewId] = useState('');
+  const [assessmentReviews, setAssessmentReviews] = useState({});
+  const [reviewLoading, setReviewLoading] = useState({});
+  const [reviewInsights, setReviewInsights] = useState({});
+  const [reviewInsightLoading, setReviewInsightLoading] = useState({});
   // Course Materials State
   const [courseMaterials, setCourseMaterials] = useState([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
@@ -53,48 +54,42 @@ export default function EmployeeDashboard() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [language]);
+  useEffect(() => {
+    setAssessmentReviews({});
+    setExpandedReviewId('');
+    fetchData();
+  }, [language]);
 
-  // Fetch AI Recommendations
-  const fetchRecs = async () => {
-    setAiRecsLoading(true);
+  const loadAssessmentReview = async (courseId) => {
+    setExpandedReviewId(prev => prev === courseId ? '' : courseId);
+    if (assessmentReviews[courseId]) return;
+    setReviewLoading(prev => ({ ...prev, [courseId]: true }));
     try {
-      const res = await getAIRecommendations();
-      setAiRecs(res.data.recommendations || []);
-    } catch (e) { console.error('AI recs error', e); }
-    setAiRecsLoading(false);
-  };
-  const refreshRecs = async () => {
-    setAiRecsLoading(true);
-    try {
-      await clearAIRecommendationsCache();
-      const res = await getAIRecommendations();
-      setAiRecs(res.data.recommendations || []);
-    } catch (e) { console.error('Refresh recs error', e); }
-    setAiRecsLoading(false);
-  };
-
-  // Fetch AI Insights
-  const fetchInsights = async () => {
-    setAiInsightsLoading(true);
-    try {
-      const res = await getAIInsightsMe();
-      setAiInsights(res.data.insights || '');
-    } catch (e) { console.error('AI insights error', e); }
-    setAiInsightsLoading(false);
-  };
-  const refreshInsights = async () => {
-    setAiInsightsLoading(true);
-    try {
-      await clearAIInsightsCache();
-      const res = await getAIInsightsMe();
-      setAiInsights(res.data.insights || '');
-    } catch (e) { console.error('Refresh insights error', e); }
-    setAiInsightsLoading(false);
+      const [reviewRes, insightRes] = await Promise.all([
+        getAssessmentReview(courseId, language),
+        getAssessmentReviewInsight(courseId),
+      ]);
+      setAssessmentReviews(prev => ({ ...prev, [courseId]: reviewRes.data }));
+      setReviewInsights(prev => ({ ...prev, [courseId]: insightRes.data.insights || '' }));
+    } catch (e) {
+      console.error('Assessment review error', e);
+      setActionMsg(e.response?.data?.detail || 'Failed to load assessment review');
+      setTimeout(() => setActionMsg(''), 3000);
+    }
+    setReviewLoading(prev => ({ ...prev, [courseId]: false }));
   };
 
-  useEffect(() => { fetchRecs(); }, []);
-  useEffect(() => { if (activeSection === 'progress') fetchInsights(); }, [activeSection]);
+  const refreshAssessmentInsight = async (courseId) => {
+    setReviewInsightLoading(prev => ({ ...prev, [courseId]: true }));
+    try {
+      await clearAssessmentReviewInsightCache(courseId);
+      const res = await getAssessmentReviewInsight(courseId);
+      setReviewInsights(prev => ({ ...prev, [courseId]: res.data.insights || '' }));
+    } catch (e) {
+      console.error('Assessment insight error', e);
+    }
+    setReviewInsightLoading(prev => ({ ...prev, [courseId]: false }));
+  };
 
   const handleOpenCourse = async (courseId) => {
       try {
@@ -174,12 +169,12 @@ export default function EmployeeDashboard() {
 
   if (loading) return <div className="loading-screen"><div className="loader"></div></div>;
 
-  const { progress, courses, growth_insights, certificates, notifications } = data || {};
+  const { progress, courses, certificates, notifications } = data || {};
+  const completedCourses = (courses || []).filter(course => course.status === 'completed');
 
     const navItems = [
     { id: 'courses', icon: <IconBook size={20} />, label: t('nav.my_courses') },
     { id: 'progress', icon: <IconTrendingUp size={20} />, label: t('nav.my_performance') },
-    { id: 'growth', icon: <IconAward size={20} />, label: t('nav.growth_insights') },
     { id: 'certificates', icon: <IconCheckCircle size={20} />, label: t('nav.certificates') },
     { id: 'notifications', icon: <IconAlertCircle size={20} />, label: t('nav.notifications') },
   ];
@@ -503,37 +498,6 @@ export default function EmployeeDashboard() {
                 {(courses || []).filter(c => c.type !== 'mandatory').length === 0 && <p className="empty-state">{t('courses.no_role_specific')}</p>}
               </div>
 
-              {/* AI Recommendations Card */}
-              <div style={{marginTop: '30px'}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
-                  <h2 className="section-title" style={{margin: 0}}>✨ {t('ai.recommended_for_you')}</h2>
-                  <button className="btn btn-outline btn-sm" onClick={refreshRecs} disabled={aiRecsLoading}>
-                    {aiRecsLoading ? '...' : t('ai.refresh_recommendations')}
-                  </button>
-                </div>
-                {aiRecsLoading ? (
-                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>{t('ai.loading_recommendations')}</p>
-                ) : aiRecs.length > 0 ? (
-                  <div className="course-grid">
-                    {aiRecs.map((rec, i) => (
-                      <div key={i} className="card course-card" style={{borderTop: '3px solid var(--accent)'}}>
-                        <div className="course-header">
-                          <span className="badge badge-success">{t('ai.ai_recommended')}</span>
-                          <span className="badge badge-primary">{t(`training_modes.${rec.training_mode}`) !== `training_modes.${rec.training_mode}` ? t(`training_modes.${rec.training_mode}`) : rec.training_mode}</span>
-                        </div>
-                        <h4 style={{fontSize: '16px', margin: '12px 0 8px 0'}}>{rec.title}</h4>
-                        <p style={{fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '15px', lineHeight: 1.5}}>{rec.reason}</p>
-                        <button className="btn btn-accent btn-sm" style={{width: '100%', justifyContent: 'center'}} onClick={() => handleOpenCourse(rec.course_id)}>
-                          <IconPlay size={14} /> {t('ai.view_course')}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>{t('ai.no_recommendations')}</p>
-                )}
-              </div>
-
             </section>
           )}
 
@@ -575,54 +539,60 @@ export default function EmployeeDashboard() {
                 </div>
               </div>
 
-              {/* AI Performance Insights */}
+              {/* Assessment Reviews */}
               <div className="card" style={{marginTop: 'var(--space-xl)', padding: 'var(--space-lg)'}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
-                  <h3 style={{display: 'flex', alignItems: 'center', gap: '8px'}}>✨ {t('ai.performance_insights')}</h3>
-                  <button className="btn btn-outline btn-sm" onClick={refreshInsights} disabled={aiInsightsLoading}>
-                    {aiInsightsLoading ? '...' : t('ai.regenerate')}
-                  </button>
-                </div>
-                {aiInsightsLoading ? (
-                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>Analyzing...</p>
-                ) : aiInsights ? (
-                  <div style={{whiteSpace: 'pre-line', fontSize: '14px', lineHeight: 1.7, color: 'var(--text-secondary)'}}>
-                    {aiInsights}
+                <h3 style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px'}}><IconAward size={20} /> Review Assessment</h3>
+                {completedCourses.length > 0 ? (
+                  <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                    {completedCourses.map(course => {
+                      const isOpen = expandedReviewId === course.course_id;
+                      const review = assessmentReviews[course.course_id];
+                      return (
+                        <div key={course.course_id} style={{border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface)'}}>
+                          <button className="btn btn-outline" style={{width: '100%', justifyContent: 'space-between', border: 0, borderRadius: 0, padding: '14px 16px'}} onClick={() => loadAssessmentReview(course.course_id)}>
+                            <span style={{fontWeight: 700, color: 'var(--text)'}}>{course.title}</span>
+                            <span style={{color: 'var(--success)', fontWeight: 700}}>{course.score}%</span>
+                          </button>
+                          {isOpen && (
+                            <div style={{padding: '16px', borderTop: '1px solid var(--border-light)'}}>
+                              {reviewLoading[course.course_id] ? (
+                                <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>Loading review...</p>
+                              ) : review ? (
+                                <>
+                                  <div style={{marginBottom: '16px', padding: '14px', background: 'var(--accent-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--accent-border)'}}>
+                                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                                      <h4 style={{fontSize: '14px', margin: 0}}>AI Insights</h4>
+                                      <button className="btn btn-outline btn-sm" onClick={() => refreshAssessmentInsight(course.course_id)} disabled={reviewInsightLoading[course.course_id]}>
+                                        {reviewInsightLoading[course.course_id] ? '...' : t('ai.regenerate')}
+                                      </button>
+                                    </div>
+                                    <div style={{whiteSpace: 'pre-line', fontSize: '13px', lineHeight: 1.6, color: 'var(--text-secondary)'}}>
+                                      {reviewInsights[course.course_id] || 'No insights available yet.'}
+                                    </div>
+                                  </div>
+                                  <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                                    {review.questions.map(q => (
+                                      <div key={q.question_index} style={{padding: '14px', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', background: q.is_correct ? 'var(--success-bg)' : 'var(--surface-hover)'}}>
+                                        <p style={{fontWeight: 700, margin: '0 0 10px 0', fontSize: '14px'}}>{q.question_index + 1}. {q.question}</p>
+                                        <p style={{fontSize: '13px', margin: '0 0 6px 0', color: q.is_correct ? 'var(--success)' : 'var(--danger)'}}>Your answer: {q.selected_text || 'Not available'}</p>
+                                        <p style={{fontSize: '13px', margin: 0, color: 'var(--text-secondary)'}}>Correct answer: <strong>{q.correct_text}</strong></p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : (
+                                <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>Review unavailable.</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
-                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>No insights available yet.</p>
+                  <p style={{color: 'var(--text-tertiary)', fontSize: '14px'}}>Completed assessments will appear here for review.</p>
                 )}
-                <p style={{fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '12px'}}>{t('ai.generated_by_ai')}</p>
               </div>
-            </section>
-          )}
-
-          {/* Growth Insights */}
-          {activeSection === 'growth' && (
-            <section className="fade-in">
-              <h2 className="section-title">{t('growth.title')}</h2>
-              {(growth_insights || []).length > 0 ? (
-                <div className="insights-grid">
-                  {growth_insights.map((insight, i) => (
-                    <div key={i} className="card insight-card">
-                      <div className="insight-icon" style={{background: 'var(--success-bg)', color: 'var(--success)', padding: '10px', borderRadius: '8px', display: 'inline-block', marginBottom: '15px'}}><IconTrendingUp /></div>
-                      <h3>{insight.track}</h3>
-                      <p style={{color: 'var(--text-secondary)'}}>{insight.message}</p>
-                      <div className="insight-tags" style={{marginTop: '20px'}}>
-                        {insight.categories_completed.map(cat => (
-                          <span key={cat} className="badge badge-success">{cat}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="card empty-insights">
-                  <div style={{color: 'var(--text-tertiary)', marginBottom: '15px'}}><IconAward size={40} /></div>
-                  <h3>{t('growth.keep_learning')}</h3>
-                  <p>{t('growth.keep_learning_msg')}</p>
-                </div>
-              )}
             </section>
           )}
 

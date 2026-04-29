@@ -63,12 +63,26 @@ export const assignAll = (data) => api.post('/assignments/assign-all', data);
 // Create course (multilingual)
 export const createCourse = (data) => api.post('/courses', data);
 
+// Edit course (single-language with auto-translate)
+export const updateCourse = (courseId, data) => api.put(`/courses/${courseId}`, data);
+
+// AI generate course fields
+export const generateCourseAI = (data) => api.post('/courses/generate-ai', data);
+
+// Edit employee
+export const updateEmployee = (employeeId, data) => api.put(`/employees/${employeeId}`, data);
+
+// Employee course management
+export const getEmployeeCourses = (employeeId) => api.get(`/employees/${employeeId}/courses`);
+export const deassignCourse = (employeeId, courseId) => api.delete(`/employees/${employeeId}/courses/${courseId}`);
+
 // Employee APIs
 export const getEmployeeDashboard = (lang) => api.get('/dashboard/employee', { params: { lang: lang || 'en' } });
 export const getMyCourses = (lang) => api.get('/courses/my', { params: { lang: lang || 'en' } });
 export const getCourseDetail = (courseId, lang) => api.get(`/courses/${courseId}`, { params: { lang: lang || 'en' } });
 export const getAssessment = (courseId) => api.get(`/assessments/${courseId}`);
 export const submitAssessment = (data) => api.post('/assessment/submit', data);
+export const getAssessmentReview = (courseId, lang) => api.get(`/assessments/${courseId}/review`, { params: { lang: lang || 'en' } });
 
 // User language preference
 export const updateLanguage = (lang) => api.patch('/users/me/language', { selected_language: lang });
@@ -96,7 +110,8 @@ export const clearAIRecommendationsCache = () => api.delete('/api/ai/recommendat
 export const getAIInsightsMe = () => api.get('/api/ai/insights/me');
 export const getAIInsightsFor = (employeeId) => api.get(`/api/ai/insights/${employeeId}`);
 export const clearAIInsightsCache = () => api.delete('/api/ai/insights/cache');
+export const getAssessmentReviewInsight = (courseId) => api.get(`/api/ai/assessment-review/${courseId}`);
+export const clearAssessmentReviewInsightCache = (courseId) => api.delete(`/api/ai/assessment-review/${courseId}/cache`);
 export const summarizeMaterial = (fileId, lang) => api.post('/api/ai/summarize-material', { file_id: fileId, lang });
 
 export default api;
-

@@ -19,6 +19,11 @@ async def get_assessment(course_id: str, lang: Optional[str] = Query(default="en
         "user_id": user["_id"],
         "course_id": course_id
     })
+    if not progress:
+        progress = await db.progress.find_one({
+            "user_id": str(user["_id"]),
+            "course_id": course_id
+        })
     
     if not progress:
         raise HTTPException(status_code=403, detail="Course not assigned to you")
@@ -59,6 +64,11 @@ async def submit_assessment(req: AssessmentSubmitRequest, user=Depends(require_r
         "user_id": user_id,
         "course_id": req.course_id,
     })
+    if not progress:
+        progress = await db.progress.find_one({
+            "user_id": str(user_id),
+            "course_id": req.course_id,
+        })
     
     if not progress:
         raise HTTPException(status_code=404, detail="Course not assigned to you")
@@ -76,9 +86,19 @@ async def submit_assessment(req: AssessmentSubmitRequest, user=Depends(require_r
         
     # Grade assessment
     correct_count = 0
+    review_items = []
     for idx, q in enumerate(questions):
-        if req.answers[idx] == q["correct_answer"]:
+        selected_answer = req.answers[idx]
+        correct_answer = q["correct_answer"]
+        is_correct = selected_answer == correct_answer
+        if is_correct:
             correct_count += 1
+        review_items.append({
+            "question_index": idx,
+            "selected_answer": selected_answer,
+            "correct_answer": correct_answer,
+            "is_correct": is_correct,
+        })
             
     score = (correct_count / len(questions)) * 100
     
@@ -92,6 +112,8 @@ async def submit_assessment(req: AssessmentSubmitRequest, user=Depends(require_r
             {"$set": {
                 "status": "completed",
                 "score": score,
+                "assessment_answers": req.answers,
+                "assessment_review": review_items,
                 "completed_at": datetime.utcnow().isoformat(),
             }}
         )
@@ -102,6 +124,8 @@ async def submit_assessment(req: AssessmentSubmitRequest, user=Depends(require_r
             {"$set": {
                 "status": "in_progress",
                 "score": score,
+                "assessment_answers": req.answers,
+                "assessment_review": review_items,
             }}
         )
 
@@ -109,4 +133,76 @@ async def submit_assessment(req: AssessmentSubmitRequest, user=Depends(require_r
         "score": score,
         "passed": passed,
         "message": "Congratulations! You passed." if passed else "Please review the material and try again. Minimum 60% required to pass."
+    }
+
+
+@router.get("/assessments/{course_id}/review")
+async def get_assessment_review(course_id: str, lang: Optional[str] = Query(default="en"), user=Depends(require_role("employee"))):
+    db = get_db()
+    progress = await db.progress.find_one({
+        "user_id": user["_id"],
+        "course_id": course_id,
+        "status": "completed",
+    })
+    if not progress:
+        progress = await db.progress.find_one({
+            "user_id": str(user["_id"]),
+            "course_id": course_id,
+            "status": "completed",
+        })
+    if not progress:
+        raise HTTPException(status_code=404, detail="Completed assessment not found")
+
+    assessment = await db.assessments.find_one({"course_id": course_id})
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    course = None
+    try:
+        course = await db.courses.find_one({"_id": ObjectId(course_id)})
+    except Exception:
+        course = None
+
+    def resolve_ml(field):
+        if isinstance(field, dict):
+            return field.get(lang) or field.get("en") or next((v for v in field.values() if v), "")
+        return field or ""
+
+    submitted_answers = progress.get("assessment_answers", [])
+    questions = assessment.get("questions", [])
+    review = []
+
+    async def translate_text(text):
+        if lang == "en":
+            return text
+        try:
+            return await translate(text, "en", lang)
+        except Exception:
+            return text
+
+    for idx, q in enumerate(questions):
+        options = q.get("options", [])
+        if lang != "en":
+            translated_options = await asyncio.gather(*(translate_text(o) for o in options))
+            options = list(translated_options)
+
+        correct_answer = q.get("correct_answer")
+        selected_answer = submitted_answers[idx] if idx < len(submitted_answers) else None
+        review.append({
+            "question_index": idx,
+            "question": await translate_text(q.get("question", "")),
+            "options": options,
+            "selected_answer": selected_answer,
+            "selected_text": options[selected_answer] if isinstance(selected_answer, int) and 0 <= selected_answer < len(options) else None,
+            "correct_answer": correct_answer,
+            "correct_text": options[correct_answer] if isinstance(correct_answer, int) and 0 <= correct_answer < len(options) else None,
+            "is_correct": selected_answer == correct_answer,
+        })
+
+    return {
+        "course_id": course_id,
+        "course_title": resolve_ml(course.get("title", "")) if course else "",
+        "score": progress.get("score", 0),
+        "completed_at": progress.get("completed_at"),
+        "questions": review,
     }

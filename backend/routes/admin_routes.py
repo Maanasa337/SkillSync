@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from models import AddEmployeeRequest, AssignCourseRequest, IncentiveClaimRequest
+from models import AddEmployeeRequest, AssignCourseRequest, IncentiveClaimRequest, EmployeeUpdateRequest
 from auth import hash_password, require_role
 from database import get_db
 from bson import ObjectId
@@ -426,3 +426,93 @@ async def claim_incentive(req: IncentiveClaimRequest, user=Depends(require_role(
         "amount": incentive["claimable_amount"],
         "redirect_url": redirect_url
     }
+
+
+@router.put("/employees/{employee_id}")
+async def update_employee(employee_id: str, req: EmployeeUpdateRequest, user=Depends(require_role("admin"))):
+    """Update employee details."""
+    db = get_db()
+
+    employee = await db.users.find_one({"_id": ObjectId(employee_id), "role": "employee"})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    update_data = {}
+    if req.name is not None:
+        update_data["name"] = req.name
+    if req.email is not None:
+        # Check email uniqueness
+        existing = await db.users.find_one({"email": req.email, "_id": {"$ne": ObjectId(employee_id)}})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already in use by another user")
+        update_data["email"] = req.email
+    if req.job_role is not None:
+        update_data["job_role"] = req.job_role
+    if req.department is not None:
+        valid_depts = ["Production", "Quality", "Maintenance", "HR"]
+        if req.department not in valid_depts:
+            raise HTTPException(status_code=400, detail=f"Invalid department. Must be one of {valid_depts}")
+        update_data["department"] = req.department
+    if req.primary_language is not None:
+        valid_langs = ["en", "hi", "ta"]
+        if req.primary_language not in valid_langs:
+            raise HTTPException(status_code=400, detail=f"Invalid language. Must be one of {valid_langs}")
+        update_data["primary_language"] = req.primary_language
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    await db.users.update_one({"_id": ObjectId(employee_id)}, {"$set": update_data})
+
+    return {"message": "Employee updated successfully", "employee_id": employee_id}
+
+
+@router.get("/employees/{employee_id}/courses")
+async def get_employee_courses(employee_id: str, user=Depends(require_role("admin"))):
+    """Get all courses assigned to a specific employee with full details."""
+    db = get_db()
+
+    employee = await db.users.find_one({"_id": ObjectId(employee_id), "role": "employee"})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    progress_records = await db.progress.find({"user_id": employee_id}).to_list(100)
+
+    courses = []
+    for p in progress_records:
+        course = await db.courses.find_one({"_id": ObjectId(p["course_id"])})
+        if course:
+            courses.append({
+                "progress_id": str(p["_id"]),
+                "course_id": str(course["_id"]),
+                "title": resolve_lang(course.get("title", ""), "en"),
+                "category": course.get("category", ""),
+                "training_mode": course.get("training_mode", "online"),
+                "status": p["status"],
+                "score": p.get("score", 0),
+                "assigned_date": p.get("assigned_date"),
+                "deadline_date": p.get("deadline_date"),
+                "completion_date": p.get("completion_date", p.get("completed_at")),
+            })
+
+    return courses
+
+
+@router.delete("/employees/{employee_id}/courses/{course_id}")
+async def deassign_course(employee_id: str, course_id: str, user=Depends(require_role("admin"))):
+    """Remove a course assignment from an employee."""
+    db = get_db()
+
+    employee = await db.users.find_one({"_id": ObjectId(employee_id), "role": "employee"})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    result = await db.progress.delete_one({
+        "user_id": employee_id,
+        "course_id": course_id,
+    })
+
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Course assignment not found")
+
+    return {"message": "Course deassigned successfully"}

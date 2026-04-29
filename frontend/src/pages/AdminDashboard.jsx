@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { getAdminDashboard, getEmployees, getAllCourses, addEmployee, claimIncentive, getDepartmentAnalytics, createCourse, assignIndividual, assignDepartment, assignAll, getDeptEmployees, getIncentiveDetails, assignEmployeesToScheme, uploadCourseMaterial } from '../api';
+import { getAdminDashboard, getEmployees, getAllCourses, addEmployee, claimIncentive, getDepartmentAnalytics, createCourse, assignIndividual, assignDepartment, assignAll, getDeptEmployees, getIncentiveDetails, assignEmployeesToScheme, uploadCourseMaterial, getCourseMaterials, deleteCourseMaterial, updateCourse, updateEmployee, getEmployeeCourses, deassignCourse, generateCourseAI } from '../api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { IconUsers, IconCheckCircle, IconClock, IconDollarSign, IconTrendingUp, IconAward, IconAlertCircle, IconX, IconGlobe, IconBuilding } from '../components/Icons';
+import { IconUsers, IconCheckCircle, IconClock, IconDollarSign, IconTrendingUp, IconAward, IconAlertCircle, IconX, IconGlobe, IconBuilding, IconBook } from '../components/Icons';
 import { useLanguage } from '../context/LanguageContext';
 import axios from 'axios';
 import './Dashboard.css';
@@ -101,7 +101,9 @@ export default function AdminDashboard() {
     description: { en: '', hi: '', ta: '' },
     youtube_link: { en: '', hi: '', ta: '' },
     training_mode: 'online',
-    category: 'Safety'
+    category: 'Safety',
+    skills: [],
+    duration_minutes: 0,
   });
   const [createStatus, setCreateStatus] = useState({ loading: false, msg: '', err: '' });
   const [courseFiles, setCourseFiles] = useState([]);
@@ -110,6 +112,35 @@ export default function AdminDashboard() {
   // Scoreboard
   const [scoreboardCourseId, setScoreboardCourseId] = useState('');
   const [scoreboardData, setScoreboardData] = useState([]);
+
+  // Edit Course Modal
+  const [showEditCourse, setShowEditCourse] = useState(false);
+  const [editCourseId, setEditCourseId] = useState('');
+  const [editCourseForm, setEditCourseForm] = useState({ title: '', description: '', youtube_link: '', skills: [], duration_minutes: 0, training_mode: 'online', category: 'Safety' });
+  const [editCourseStatus, setEditCourseStatus] = useState({ loading: false, msg: '', err: '' });
+  const [editCourseMaterials, setEditCourseMaterials] = useState([]);
+  const [editCourseFiles, setEditCourseFiles] = useState([]);
+  const [editMaterialsLoading, setEditMaterialsLoading] = useState(false);
+  const [aiGenLoading, setAiGenLoading] = useState(false);
+  const [skillInput, setSkillInput] = useState('');
+
+  // Edit Employee Modal
+  const [showEditEmployee, setShowEditEmployee] = useState(false);
+  const [editEmpId, setEditEmpId] = useState('');
+  const [editEmpForm, setEditEmpForm] = useState({ name: '', email: '', job_role: '', department: 'Production', primary_language: 'en' });
+  const [editEmpStatus, setEditEmpStatus] = useState({ loading: false, msg: '', err: '' });
+
+  // Employee Course Management
+  const [expandedEmpId, setExpandedEmpId] = useState(null);
+  const [empCourses, setEmpCourses] = useState([]);
+  const [empCoursesLoading, setEmpCoursesLoading] = useState(false);
+  const [showEmpAssign, setShowEmpAssign] = useState(false);
+  const [empAssignCourseId, setEmpAssignCourseId] = useState('');
+  const [empAssignDeadline, setEmpAssignDeadline] = useState('');
+
+  // Create course AI gen
+  const [createAiGenLoading, setCreateAiGenLoading] = useState(false);
+  const [createSkillInput, setCreateSkillInput] = useState('');
 
   const fetchScoreboard = async (cId) => {
     try {
@@ -184,6 +215,171 @@ export default function AdminDashboard() {
     setScoreboardCourseId(cid);
     fetchScoreboard(cid);
   }
+
+  // --- Edit Course ---
+  const openEditCourse = async (course) => {
+    setEditCourseId(course.id);
+    setEditCourseForm({
+      title: course.title || '',
+      description: course.description || '',
+      youtube_link: course.youtube_link || '',
+      skills: course.skills_raw || course.skills || [],
+      duration_minutes: course.duration_minutes || 0,
+      training_mode: course.training_mode || 'online',
+      category: course.category || 'Safety',
+    });
+    setSkillInput('');
+    setEditCourseFiles([]);
+    setEditCourseMaterials([]);
+    setEditCourseStatus({ loading: false, msg: '', err: '' });
+    setShowEditCourse(true);
+    setEditMaterialsLoading(true);
+    try {
+      const res = await getCourseMaterials(course.id);
+      setEditCourseMaterials(res.data.materials || []);
+    } catch (err) {
+      setEditCourseMaterials([]);
+    }
+    setEditMaterialsLoading(false);
+  };
+
+  const handleEditCourse = async (e) => {
+    e.preventDefault();
+    setEditCourseStatus({ loading: true, msg: '', err: '' });
+    try {
+      await updateCourse(editCourseId, { ...editCourseForm, source_lang: language });
+      if (editCourseFiles.length > 0) {
+        setEditCourseStatus({ loading: true, msg: 'Uploading materials...', err: '' });
+        for (const cf of editCourseFiles) {
+          await uploadCourseMaterial(editCourseId, cf.file, cf.lang);
+        }
+      }
+      setEditCourseStatus({ loading: false, msg: 'Course updated!', err: '' });
+      setShowEditCourse(false);
+      setActionMsg('Course updated and translations generated!');
+      fetchData();
+      setTimeout(() => setActionMsg(''), 3000);
+    } catch (err) {
+      setEditCourseStatus({ loading: false, msg: '', err: err.response?.data?.detail || 'Failed to update course' });
+    }
+  };
+
+  const handleDeleteEditMaterial = async (fileId) => {
+    if (!window.confirm('Remove this course material?')) return;
+    setEditMaterialsLoading(true);
+    try {
+      await deleteCourseMaterial(editCourseId, fileId);
+      const res = await getCourseMaterials(editCourseId);
+      setEditCourseMaterials(res.data.materials || []);
+      setActionMsg('Course material removed');
+      setTimeout(() => setActionMsg(''), 3000);
+      fetchData();
+    } catch (err) {
+      setActionMsg(err.response?.data?.detail || 'Failed to remove material');
+      setTimeout(() => setActionMsg(''), 3000);
+    }
+    setEditMaterialsLoading(false);
+  };
+
+  const handleAIGenerate = async (isCreate = false) => {
+    const form = isCreate ? createForm : editCourseForm;
+    const titleVal = isCreate ? (form.title?.[language] || form.title?.en || '') : form.title;
+    const descVal = isCreate ? (form.description?.[language] || form.description?.en || '') : form.description;
+    if (!titleVal) { setActionMsg('Enter a title first'); setTimeout(() => setActionMsg(''), 2000); return; }
+    if (isCreate) setCreateAiGenLoading(true); else setAiGenLoading(true);
+    try {
+      const res = await generateCourseAI({ title: titleVal, description: descVal, source_lang: language });
+      const data = res.data;
+      if (isCreate) {
+        setCreateForm(prev => ({
+          ...prev,
+          youtube_link: { ...prev.youtube_link, [language]: data.youtube_link || '' },
+          skills: data.skills || [],
+          duration_minutes: data.duration_minutes || 0,
+        }));
+      } else {
+        setEditCourseForm(prev => ({
+          ...prev,
+          youtube_link: data.youtube_link || prev.youtube_link,
+          skills: data.skills || prev.skills,
+          duration_minutes: data.duration_minutes || prev.duration_minutes,
+        }));
+      }
+      setActionMsg('AI generated fields successfully!');
+      setTimeout(() => setActionMsg(''), 2000);
+    } catch (err) {
+      setActionMsg('AI generation failed');
+      setTimeout(() => setActionMsg(''), 2000);
+    }
+    if (isCreate) setCreateAiGenLoading(false); else setAiGenLoading(false);
+  };
+
+  // --- Edit Employee ---
+  const openEditEmployee = (emp) => {
+    setEditEmpId(emp.id);
+    setEditEmpForm({ name: emp.name, email: emp.email, job_role: emp.job_role, department: emp.department || 'Production', primary_language: emp.primary_language || 'en' });
+    setEditEmpStatus({ loading: false, msg: '', err: '' });
+    setShowEditEmployee(true);
+  };
+
+  const handleEditEmployee = async (e) => {
+    e.preventDefault();
+    setEditEmpStatus({ loading: true, msg: '', err: '' });
+    try {
+      await updateEmployee(editEmpId, editEmpForm);
+      setEditEmpStatus({ loading: false, msg: 'Updated!', err: '' });
+      setShowEditEmployee(false);
+      setActionMsg('Employee updated successfully!');
+      fetchData();
+      setTimeout(() => setActionMsg(''), 3000);
+    } catch (err) {
+      setEditEmpStatus({ loading: false, msg: '', err: err.response?.data?.detail || 'Failed to update' });
+    }
+  };
+
+  // --- Employee Course Management ---
+  const handleExpandEmpCourses = async (empId) => {
+    if (expandedEmpId === empId) { setExpandedEmpId(null); return; }
+    setExpandedEmpId(empId);
+    setEmpCoursesLoading(true);
+    setShowEmpAssign(false);
+    try {
+      const res = await getEmployeeCourses(empId);
+      setEmpCourses(res.data);
+    } catch { setEmpCourses([]); }
+    setEmpCoursesLoading(false);
+  };
+
+  const handleDeassignCourse = async (empId, courseId) => {
+    if (!window.confirm('Deassign this course from the employee?')) return;
+    try {
+      await deassignCourse(empId, courseId);
+      setActionMsg('Course deassigned!');
+      const res = await getEmployeeCourses(empId);
+      setEmpCourses(res.data);
+      fetchData();
+      setTimeout(() => setActionMsg(''), 3000);
+    } catch (err) {
+      setActionMsg(err.response?.data?.detail || 'Failed to deassign');
+    }
+  };
+
+  const handleEmpAssignCourse = async (empId) => {
+    if (!empAssignCourseId || !empAssignDeadline) return;
+    try {
+      await assignIndividual({ user_id: empId, course_id: empAssignCourseId, deadline_date: new Date(empAssignDeadline).toISOString() });
+      setActionMsg('Course assigned!');
+      setShowEmpAssign(false);
+      setEmpAssignCourseId('');
+      setEmpAssignDeadline('');
+      const res = await getEmployeeCourses(empId);
+      setEmpCourses(res.data);
+      fetchData();
+      setTimeout(() => setActionMsg(''), 3000);
+    } catch (err) {
+      setActionMsg(err.response?.data?.detail || 'Failed to assign');
+    }
+  };
 
   const handleCreateCourse = async (e) => {
     e.preventDefault();
@@ -385,6 +581,7 @@ export default function AdminDashboard() {
 
   const navItems = [
     { id: 'overview', icon: <IconTrendingUp size={20} />, label: t('nav.overview') },
+    { id: 'courses', icon: <IconBook size={20} />, label: 'Course Management' },
     { id: 'incentives', icon: <IconDollarSign size={20} />, label: t('nav.incentives') },
     { id: 'employees', icon: <IconUsers size={20} />, label: t('nav.employees') },
     { id: 'departments', icon: <IconBuilding size={20} />, label: t('nav.dept_analytics') },
@@ -455,8 +652,7 @@ export default function AdminDashboard() {
           {/* Overview Cards */}
           {activeSection === 'overview' && (
             <section className="fade-in">
-              <h2 className="section-title">{t('dashboard.system_overview')}</h2>
-              <div className="overview-grid">
+              <div className="overview-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                 <div className="stat-card">
                   <div className="stat-icon" style={{ background: 'var(--primary-bg)', color: 'var(--primary)' }}><IconUsers /></div>
                   <div>
@@ -485,6 +681,13 @@ export default function AdminDashboard() {
                     <p className="stat-label">{t('dashboard.claimed_incentives')}</p>
                   </div>
                 </div>
+                <button className="stat-card" style={{ textAlign: 'left', cursor: 'pointer' }} onClick={() => setActiveSection('courses')}>
+                  <div className="stat-icon" style={{ background: 'var(--accent-bg)', color: 'var(--accent)' }}><IconBook /></div>
+                  <div>
+                    <p className="stat-value">{courses.length}</p>
+                    <p className="stat-label">Course Management</p>
+                  </div>
+                </button>
               </div>
 
               {/* Quick Charts */}
@@ -525,6 +728,71 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/* Courses Management Table */}
+              <div style={{ marginTop: 'var(--space-xl)' }}>
+                <h3 style={{ marginBottom: '16px' }}>Course Management</h3>
+                <div className="card table-card" style={{ padding: 0 }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Course Title</th>
+                        <th>Category</th>
+                        <th>Mode</th>
+                        <th>Duration</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {courses.map(c => (
+                        <tr key={c.id}>
+                          <td style={{ fontWeight: 600 }}>{c.title}</td>
+                          <td><span className="badge badge-primary">{c.category}</span></td>
+                          <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{c.training_mode}</td>
+                          <td style={{ fontSize: '13px' }}>{c.duration_minutes || 0} mins</td>
+                          <td>
+                            <button className="btn btn-outline btn-sm" onClick={() => openEditCourse(c)}>✏️ Edit</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {courses.length === 0 && <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)' }}>No courses found</div>}
+                </div>
+              </div>
+
+            </section>
+          )}
+
+          {activeSection === 'courses' && (
+            <section className="fade-in">
+              <h2 className="section-title">Course Management</h2>
+              <div className="card table-card" style={{ padding: 0 }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Course Title</th>
+                      <th>Category</th>
+                      <th>Mode</th>
+                      <th>Duration</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {courses.map(c => (
+                      <tr key={c.id}>
+                        <td style={{ fontWeight: 600 }}>{c.title}</td>
+                        <td><span className="badge badge-primary">{c.category}</span></td>
+                        <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{c.training_mode}</td>
+                        <td style={{ fontSize: '13px' }}>{c.duration_minutes || 0} mins</td>
+                        <td>
+                          <button className="btn btn-outline btn-sm" onClick={() => openEditCourse(c)}>Edit</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {courses.length === 0 && <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)' }}>No courses found</div>}
+              </div>
             </section>
           )}
 
@@ -779,7 +1047,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="card table-card" style={{ padding: "0" }}>
-                {empLoading ? <SkeletonTable rows={8} cols={8} /> : (
+                {empLoading ? <SkeletonTable rows={8} cols={9} /> : (
                   <table className="data-table">
                     <thead>
                       <tr>
@@ -791,11 +1059,13 @@ export default function AdminDashboard() {
                         <th>{t('employee_mgmt.avg_score')}</th>
                         <th>Date of Joining</th>
                         <th>Experience</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {employees.map(emp => (
-                        <tr key={emp.id}>
+                        <React.Fragment key={emp.id}>
+                        <tr style={{ cursor: 'pointer' }} onClick={() => handleExpandEmpCourses(emp.id)}>
                           <td>
                             <div className="emp-name">
                               <div className="avatar-sm" style={{ background: "var(--primary-bg)", color: "var(--primary)" }}>{emp.name.charAt(0)}</div>
@@ -820,7 +1090,62 @@ export default function AdminDashboard() {
                           </td>
                           <td><span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{formatDate(emp.date_of_joining)}</span></td>
                           <td><span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{formatExperience(emp.experience_months)}</span></td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); openEditEmployee(emp); }}>✏️</button>
+                              <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); handleExpandEmpCourses(emp.id); }}>{expandedEmpId === emp.id ? '▲' : '▼'}</button>
+                            </div>
+                          </td>
                         </tr>
+                        {/* Expanded Course Panel */}
+                        {expandedEmpId === emp.id && (
+                          <tr>
+                            <td colSpan={9} style={{ padding: 0, background: 'var(--surface-hover)' }}>
+                              <div style={{ padding: '20px 30px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                  <h4 style={{ fontSize: '14px', fontWeight: 700 }}>Assigned Courses for {emp.name}</h4>
+                                  <button className="btn btn-primary btn-sm" onClick={() => setShowEmpAssign(!showEmpAssign)}>+ Assign Course</button>
+                                </div>
+                                {showEmpAssign && (
+                                  <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', alignItems: 'flex-end', padding: '12px', background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                                    <div style={{ flex: 2 }}>
+                                      <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Course</label>
+                                      <select value={empAssignCourseId} onChange={e => setEmpAssignCourseId(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                                        <option value="">Select a course</option>
+                                        {courses.filter(c => !empCourses.find(ec => ec.course_id === c.id)).map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                      </select>
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                      <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Deadline</label>
+                                      <input type="date" value={empAssignDeadline} onChange={e => setEmpAssignDeadline(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border)' }} />
+                                    </div>
+                                    <button className="btn btn-primary btn-sm" onClick={() => handleEmpAssignCourse(emp.id)} disabled={!empAssignCourseId || !empAssignDeadline}>Assign</button>
+                                  </div>
+                                )}
+                                {empCoursesLoading ? <p style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>Loading...</p> : empCourses.length > 0 ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {empCourses.map(ec => (
+                                      <div key={ec.course_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+                                        <div style={{ flex: 1 }}>
+                                          <span style={{ fontWeight: 600, fontSize: '13px' }}>{ec.title}</span>
+                                          <span style={{ marginLeft: '10px', fontSize: '11px', color: 'var(--text-tertiary)' }}>{ec.category} · {ec.training_mode}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                          <span className={`badge ${ec.status === 'completed' ? 'badge-success' : ec.status === 'in_progress' ? 'badge-warning' : 'badge-primary'}`}>
+                                            {ec.status.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                          </span>
+                                          {ec.score > 0 && <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--success)' }}>{ec.score}%</span>}
+                                          <button className="btn btn-outline btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger)', fontSize: '11px', padding: '4px 8px' }} onClick={() => handleDeassignCourse(emp.id, ec.course_id)}>Deassign</button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : <p style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>No courses assigned</p>}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -1120,60 +1445,58 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Create Course Modal */}
+      {/* Create Course Modal — Single Language */}
       {showCreateCourse && (
         <div className="modal-overlay" onClick={() => setShowCreateCourse(false)}>
-          <div className="modal" style={{ width: '800px', maxWidth: '95vw' }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ width: '650px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: "20px" }}>
               <h2>{t('create_course_panel.title')}</h2>
               <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowCreateCourse(false)}><IconX /></button>
             </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '15px', background: 'var(--primary-bg)', padding: '8px 12px', borderRadius: '6px' }}>
+              ℹ️ Fill in the current language ({LANGUAGES.find(l => l.code === language)?.label}). Other languages will be auto-translated.
+            </p>
 
             <form onSubmit={handleCreateCourse} className="modal-form">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                <div className="input-group">
-                  <label>{t('create_course_panel.title_en')}</label>
-                  <input value={createForm.title.en} onChange={e => setCreateForm({ ...createForm, title: { ...createForm.title, en: e.target.value } })} required />
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>Title ({LANGUAGES.find(l => l.code === language)?.label})</label>
+                <input value={createForm.title[language] || ''} onChange={e => setCreateForm({ ...createForm, title: { ...createForm.title, [language]: e.target.value } })} required />
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>Description ({LANGUAGES.find(l => l.code === language)?.label})</label>
+                <textarea value={createForm.description[language] || ''} onChange={e => setCreateForm({ ...createForm, description: { ...createForm.description, [language]: e.target.value } })} required rows={3} />
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>YouTube Link ({LANGUAGES.find(l => l.code === language)?.label})</label>
+                <input value={createForm.youtube_link[language] || ''} onChange={e => setCreateForm({ ...createForm, youtube_link: { ...createForm.youtube_link, [language]: e.target.value } })} placeholder="https://youtube.com/watch?v=..." />
+              </div>
+
+              {/* Skills */}
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>Acquired Skills</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                  {(createForm.skills || []).map((s, i) => (
+                    <span key={i} className="selected-tag">{s}<button type="button" onClick={() => setCreateForm(prev => ({ ...prev, skills: prev.skills.filter((_, idx) => idx !== i) }))}>×</button></span>
+                  ))}
                 </div>
-                <div className="input-group">
-                  <label>{t('create_course_panel.title_hi')}</label>
-                  <input value={createForm.title.hi} onChange={e => setCreateForm({ ...createForm, title: { ...createForm.title, hi: e.target.value } })} required />
-                </div>
-                <div className="input-group">
-                  <label>{t('create_course_panel.title_ta')}</label>
-                  <input value={createForm.title.ta} onChange={e => setCreateForm({ ...createForm, title: { ...createForm.title, ta: e.target.value } })} required />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input value={createSkillInput} onChange={e => setCreateSkillInput(e.target.value)} placeholder="Type a skill and press Add" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (createSkillInput.trim()) { setCreateForm(prev => ({ ...prev, skills: [...(prev.skills || []), createSkillInput.trim()] })); setCreateSkillInput(''); } } }} />
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => { if (createSkillInput.trim()) { setCreateForm(prev => ({ ...prev, skills: [...(prev.skills || []), createSkillInput.trim()] })); setCreateSkillInput(''); } }}>Add</button>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                <div className="input-group">
-                  <label>{t('create_course_panel.desc_en')}</label>
-                  <textarea value={createForm.description.en} onChange={e => setCreateForm({ ...createForm, description: { ...createForm.description, en: e.target.value } })} required />
-                </div>
-                <div className="input-group">
-                  <label>{t('create_course_panel.desc_hi')}</label>
-                  <textarea value={createForm.description.hi} onChange={e => setCreateForm({ ...createForm, description: { ...createForm.description, hi: e.target.value } })} required />
-                </div>
-                <div className="input-group">
-                  <label>{t('create_course_panel.desc_ta')}</label>
-                  <textarea value={createForm.description.ta} onChange={e => setCreateForm({ ...createForm, description: { ...createForm.description, ta: e.target.value } })} required />
-                </div>
+              {/* Duration */}
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>Duration (minutes)</label>
+                <input type="number" value={createForm.duration_minutes || 0} onChange={e => setCreateForm({ ...createForm, duration_minutes: parseInt(e.target.value) || 0 })} min={0} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                <div className="input-group">
-                  <label>{t('create_course_panel.yt_en')}</label>
-                  <input value={createForm.youtube_link.en} onChange={e => setCreateForm({ ...createForm, youtube_link: { ...createForm.youtube_link, en: e.target.value } })} />
-                </div>
-                <div className="input-group">
-                  <label>{t('create_course_panel.yt_hi')}</label>
-                  <input value={createForm.youtube_link.hi} onChange={e => setCreateForm({ ...createForm, youtube_link: { ...createForm.youtube_link, hi: e.target.value } })} />
-                </div>
-                <div className="input-group">
-                  <label>{t('create_course_panel.yt_ta')}</label>
-                  <input value={createForm.youtube_link.ta} onChange={e => setCreateForm({ ...createForm, youtube_link: { ...createForm.youtube_link, ta: e.target.value } })} />
-                </div>
-              </div>
+              {/* AI Generate Button */}
+              <button type="button" className="btn btn-outline" style={{ width: '100%', marginBottom: '15px', justifyContent: 'center', background: 'linear-gradient(135deg, #f0f4ff, #e8f5e9)', border: '1px solid var(--primary-light)' }} onClick={() => handleAIGenerate(true)} disabled={createAiGenLoading}>
+                {createAiGenLoading ? '⏳ Generating...' : '✨ Generate Skills, YouTube Link & Duration with AI'}
+              </button>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                 <div className="input-group">
@@ -1202,10 +1525,7 @@ export default function AdminDashboard() {
                 <div style={{ padding: '15px', border: '2px dashed var(--border)', borderRadius: '8px', background: 'var(--surface)' }}>
                   <input type="file" multiple onChange={(e) => {
                     const newFiles = Array.from(e.target.files).map(f => ({ file: f, lang: 'all' }));
-                    if (courseFiles.length + newFiles.length > 5) {
-                       alert(t('materials.max_files_reached'));
-                       return;
-                    }
+                    if (courseFiles.length + newFiles.length > 5) { alert(t('materials.max_files_reached')); return; }
                     setCourseFiles([...courseFiles, ...newFiles]);
                     e.target.value = null;
                   }} />
@@ -1216,19 +1536,7 @@ export default function AdminDashboard() {
                     {courseFiles.map((cf, idx) => (
                       <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-hover)', padding: '8px 12px', borderRadius: '4px' }}>
                         <span style={{ fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{cf.file.name}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <select value={cf.lang} onChange={(e) => {
-                            const updated = [...courseFiles];
-                            updated[idx].lang = e.target.value;
-                            setCourseFiles(updated);
-                          }} style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '4px', border: '1px solid var(--border)' }}>
-                            <option value="all">{t('materials.all_languages')}</option>
-                            <option value="en">{t('materials.english')}</option>
-                            <option value="hi">{t('materials.hindi')}</option>
-                            <option value="ta">{t('materials.tamil')}</option>
-                          </select>
-                          <button type="button" onClick={() => setCourseFiles(courseFiles.filter((_, i) => i !== idx))} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}><IconX size={14} /></button>
-                        </div>
+                        <button type="button" onClick={() => setCourseFiles(courseFiles.filter((_, i) => i !== idx))} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}><IconX size={14} /></button>
                       </div>
                     ))}
                   </div>
@@ -1242,6 +1550,177 @@ export default function AdminDashboard() {
                 <button type="button" className="btn btn-outline" onClick={() => setShowCreateCourse(false)}>{t('employee_mgmt.cancel')}</button>
                 <button type="submit" className="btn btn-primary" disabled={createStatus.loading}>
                   {createStatus.loading ? t('create_course_panel.creating') : t('create_course_panel.create')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {showEditCourse && (
+        <div className="modal-overlay" onClick={() => setShowEditCourse(false)}>
+          <div className="modal" style={{ width: '650px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: "20px" }}>
+              <h2>Edit Course</h2>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowEditCourse(false)}><IconX /></button>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '15px', background: 'var(--primary-bg)', padding: '8px 12px', borderRadius: '6px' }}>
+              ℹ️ Edit in {LANGUAGES.find(l => l.code === language)?.label}. Changes will auto-translate to all languages via Bhashini API.
+            </p>
+
+            <form onSubmit={handleEditCourse} className="modal-form">
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>Title ({LANGUAGES.find(l => l.code === language)?.label})</label>
+                <input value={editCourseForm.title} onChange={e => setEditCourseForm({ ...editCourseForm, title: e.target.value })} required />
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>Description ({LANGUAGES.find(l => l.code === language)?.label})</label>
+                <textarea value={editCourseForm.description} onChange={e => setEditCourseForm({ ...editCourseForm, description: e.target.value })} required rows={3} />
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>YouTube Link ({LANGUAGES.find(l => l.code === language)?.label})</label>
+                <input value={editCourseForm.youtube_link} onChange={e => setEditCourseForm({ ...editCourseForm, youtube_link: e.target.value })} placeholder="https://youtube.com/watch?v=..." />
+              </div>
+
+              {/* Skills */}
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>Acquired Skills</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                  {(editCourseForm.skills || []).map((s, i) => (
+                    <span key={i} className="selected-tag">{s}<button type="button" onClick={() => setEditCourseForm(prev => ({ ...prev, skills: prev.skills.filter((_, idx) => idx !== i) }))}>×</button></span>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input value={skillInput} onChange={e => setSkillInput(e.target.value)} placeholder="Type a skill and press Add" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (skillInput.trim()) { setEditCourseForm(prev => ({ ...prev, skills: [...(prev.skills || []), skillInput.trim()] })); setSkillInput(''); } } }} />
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => { if (skillInput.trim()) { setEditCourseForm(prev => ({ ...prev, skills: [...(prev.skills || []), skillInput.trim()] })); setSkillInput(''); } }}>Add</button>
+                </div>
+              </div>
+
+              {/* Duration */}
+              <div className="input-group" style={{ marginBottom: '15px' }}>
+                <label>Duration (minutes)</label>
+                <input type="number" value={editCourseForm.duration_minutes} onChange={e => setEditCourseForm({ ...editCourseForm, duration_minutes: parseInt(e.target.value) || 0 })} min={0} />
+              </div>
+
+              {/* AI Generate Button */}
+              <button type="button" className="btn btn-outline" style={{ width: '100%', marginBottom: '15px', justifyContent: 'center', background: 'linear-gradient(135deg, #f0f4ff, #e8f5e9)', border: '1px solid var(--primary-light)' }} onClick={() => handleAIGenerate(false)} disabled={aiGenLoading}>
+                {aiGenLoading ? '⏳ Generating...' : '✨ Generate Skills, YouTube Link & Duration with AI'}
+              </button>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                <div className="input-group">
+                  <label>Training Mode</label>
+                  <select value={editCourseForm.training_mode} onChange={e => setEditCourseForm({ ...editCourseForm, training_mode: e.target.value })}>
+                    <option value="online">Online</option>
+                    <option value="offline">Offline</option>
+                    <option value="self-paced">Self-paced</option>
+                    <option value="classroom">Classroom</option>
+                  </select>
+                </div>
+                <div className="input-group">
+                  <label>Category</label>
+                  <select value={editCourseForm.category} onChange={e => setEditCourseForm({ ...editCourseForm, category: e.target.value })}>
+                    <option value="Safety">Safety</option>
+                    <option value="Operations">Operations</option>
+                    <option value="Quality">Quality</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="HR">HR</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '20px' }}>
+                <label>Course Materials</label>
+                <div style={{ padding: '15px', border: '2px dashed var(--border)', borderRadius: '8px', background: 'var(--surface)' }}>
+                  <input type="file" multiple onChange={(e) => {
+                    const newFiles = Array.from(e.target.files).map(f => ({ file: f, lang: 'all' }));
+                    if (editCourseMaterials.length + editCourseFiles.length + newFiles.length > 5) { alert(t('materials.max_files_reached')); return; }
+                    setEditCourseFiles([...editCourseFiles, ...newFiles]);
+                    e.target.value = null;
+                  }} />
+                  <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '5px' }}>{t('materials.accepted_types')}</p>
+                </div>
+                {editMaterialsLoading ? (
+                  <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', marginTop: '10px' }}>Loading materials...</p>
+                ) : editCourseMaterials.length > 0 && (
+                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {editCourseMaterials.map((mat, idx) => (
+                      <div key={mat.file_id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-hover)', padding: '8px 12px', borderRadius: '4px', gap: '10px' }}>
+                        <span style={{ fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mat.filename}</span>
+                        <button type="button" className="btn btn-outline btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => handleDeleteEditMaterial(mat.file_id)}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {editCourseFiles.length > 0 && (
+                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {editCourseFiles.map((cf, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-hover)', padding: '8px 12px', borderRadius: '4px', gap: '10px' }}>
+                        <span style={{ fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cf.file.name}</span>
+                        <button type="button" onClick={() => setEditCourseFiles(editCourseFiles.filter((_, i) => i !== idx))} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}><IconX size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {editCourseStatus.msg && <div style={{ padding: '10px', background: 'var(--success-bg)', color: 'var(--success)', borderRadius: '6px', marginBottom: '15px' }}>{editCourseStatus.msg}</div>}
+              {editCourseStatus.err && <div style={{ padding: '10px', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: '6px', marginBottom: '15px' }}>{editCourseStatus.err}</div>}
+
+              <div className="modal-actions" style={{ marginTop: "10px" }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowEditCourse(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={editCourseStatus.loading}>
+                  {editCourseStatus.loading ? 'Saving & Translating...' : 'Save & Auto-Translate'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Employee Modal */}
+      {showEditEmployee && (
+        <div className="modal-overlay" onClick={() => setShowEditEmployee(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: "20px" }}>
+              <h2>Edit Employee</h2>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => setShowEditEmployee(false)}><IconX /></button>
+            </div>
+            <form onSubmit={handleEditEmployee} className="modal-form">
+              <div className="input-group" style={{ marginBottom: "15px" }}>
+                <label>Full Name</label>
+                <input value={editEmpForm.name} onChange={e => setEditEmpForm({ ...editEmpForm, name: e.target.value })} required />
+              </div>
+              <div className="input-group" style={{ marginBottom: "15px" }}>
+                <label>Email</label>
+                <input type="email" value={editEmpForm.email} onChange={e => setEditEmpForm({ ...editEmpForm, email: e.target.value })} required />
+              </div>
+              <div className="input-group" style={{ marginBottom: "15px" }}>
+                <label>Designation</label>
+                <input value={editEmpForm.job_role} onChange={e => setEditEmpForm({ ...editEmpForm, job_role: e.target.value })} required />
+              </div>
+              <div className="input-group" style={{ marginBottom: "15px" }}>
+                <label>Department</label>
+                <select value={editEmpForm.department} onChange={e => setEditEmpForm({ ...editEmpForm, department: e.target.value })}>
+                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="input-group" style={{ marginBottom: "15px" }}>
+                <label>Primary Language</label>
+                <select value={editEmpForm.primary_language} onChange={e => setEditEmpForm({ ...editEmpForm, primary_language: e.target.value })}>
+                  {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
+                </select>
+              </div>
+
+              {editEmpStatus.err && <div style={{ padding: '10px', background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: '6px', marginBottom: '15px' }}>{editEmpStatus.err}</div>}
+
+              <div className="modal-actions" style={{ marginTop: "30px" }}>
+                <button type="button" className="btn btn-outline" onClick={() => setShowEditEmployee(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={editEmpStatus.loading}>
+                  {editEmpStatus.loading ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

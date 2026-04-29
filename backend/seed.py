@@ -305,6 +305,43 @@ def build_courses():
             "skills": ["Labor Laws", "Compliance", "Employee Rights"],
             "duration_minutes": 40, "duration_days": 7
         },
+        # ---- New Safety Courses (2) ----
+        {
+            "title": {"en": "Chemical Safety Training", "hi": "रासायनिक सुरक्षा प्रशिक्षण", "ta": "இரசாயன பாதுகாப்பு பயிற்சி"},
+            "description": {
+                "en": "Learn proper handling, storage, and emergency response for hazardous chemicals.",
+                "hi": "खतरनाक रसायनों के उचित प्रबंधन, भंडारण और आपातकालीन प्रतिक्रिया के बारे में जानें।",
+                "ta": "அபாயகரமான இரசாயனங்களை முறையாக கையாளுதல், சேமிப்பு மற்றும் அவசரகால பதில் பற்றி அறியவும்."
+            },
+            "youtube_link": {
+                "en": "https://www.youtube.com/embed/n431Bts_W0A",
+                "hi": "https://www.youtube.com/embed/n431Bts_W0A",
+                "ta": "https://www.youtube.com/embed/n431Bts_W0A"
+            },
+            "training_mode": "online",
+            "category": "Safety",
+            "type": "mandatory", "linked_scheme": None, "incentive_value": 0,
+            "skills": ["Chemical Handling", "Spill Response", "Hazard Identification"],
+            "duration_minutes": 45, "duration_days": 10
+        },
+        {
+            "title": {"en": "Heat Stress Training", "hi": "गर्मी का तनाव प्रशिक्षण", "ta": "வெப்ப அழுத்தப் பயிற்சி"},
+            "description": {
+                "en": "Recognize the signs of heat stress, prevention techniques, and hydration strategies in hot environments.",
+                "hi": "गर्म वातावरण में गर्मी के तनाव के लक्षण, रोकथाम की तकनीक और जलयोजन रणनीतियों को पहचानें।",
+                "ta": "வெப்பமான சூழலில் வெப்ப அழுத்தத்தின் அறிகுறிகள், தடுப்பு நுட்பங்கள் மற்றும் நீரேற்றம் உத்திகளை அங்கீகரிக்கவும்."
+            },
+            "youtube_link": {
+                "en": "https://www.youtube.com/embed/U9sZ9JcTjV0",
+                "hi": "https://www.youtube.com/embed/U9sZ9JcTjV0",
+                "ta": "https://www.youtube.com/embed/U9sZ9JcTjV0"
+            },
+            "training_mode": "online",
+            "category": "Safety",
+            "type": "mandatory", "linked_scheme": None, "incentive_value": 0,
+            "skills": ["Heat Stress Prevention", "Hydration", "First Aid"],
+            "duration_minutes": 30, "duration_days": 7
+        },
     ]
 
 
@@ -406,6 +443,22 @@ def build_assessments():
             {"question": "Maximum weekly working hours under Indian law:", "options": ["40 hours", "48 hours", "56 hours", "60 hours"], "correct_answer": 1},
             {"question": "EPF stands for:", "options": ["Employee Pension Fund", "Employees' Provident Fund", "Enterprise Performance Fund", "Employment Protection Fee"], "correct_answer": 1},
             {"question": "POSH Act deals with:", "options": ["Environmental safety", "Prevention of sexual harassment at workplace", "Product quality", "Fire safety"], "correct_answer": 1},
+        ],
+        # Course 12: Chemical Safety Training
+        [
+            {"question": "What is an SDS?", "options": ["Safety Data Sheet", "System Design Specification", "Standard Delivery Service", "Secure Data Storage"], "correct_answer": 0},
+            {"question": "When handling hazardous chemicals, what is the most important PPE?", "options": ["Hard Hat", "Chemical-resistant gloves and goggles", "Steel-toe boots", "Earplugs"], "correct_answer": 1},
+            {"question": "What should you do in case of a minor chemical spill?", "options": ["Ignore it", "Report it and clean it up using the spill kit", "Wash it down the drain", "Evacuate the building"], "correct_answer": 1},
+            {"question": "Where should flammable liquids be stored?", "options": ["In a standard cabinet", "In a designated flammable storage cabinet", "On the floor", "Next to the exit"], "correct_answer": 1},
+            {"question": "If a chemical splashes in your eyes, how long should you rinse them at an eyewash station?", "options": ["1 minute", "5 minutes", "At least 15 minutes", "30 minutes"], "correct_answer": 2},
+        ],
+        # Course 13: Heat Stress Training
+        [
+            {"question": "Which of these is a symptom of heat exhaustion?", "options": ["Shivering", "Heavy sweating and weakness", "Blue lips", "Loss of hearing"], "correct_answer": 1},
+            {"question": "What is the best way to prevent heat stress?", "options": ["Drink plenty of water and take breaks in the shade", "Drink coffee", "Wear heavy clothing", "Skip lunch"], "correct_answer": 0},
+            {"question": "Is heat stroke a medical emergency?", "options": ["No, just rest", "Yes, call for emergency medical help immediately", "Only if the person is older", "Only in the summer"], "correct_answer": 1},
+            {"question": "Which of the following makes you more susceptible to heat stress?", "options": ["Drinking water", "Lack of acclimatization", "Eating a balanced diet", "Wearing a hat"], "correct_answer": 1},
+            {"question": "What should you do if a coworker shows signs of heat stroke?", "options": ["Give them a hot drink", "Move them to a cool area and call for help", "Tell them to work faster", "Ignore them"], "correct_answer": 1},
         ],
     ]
 
@@ -832,6 +885,10 @@ async def seed():
     print("   Employee:    <firstname><lastname>@skillsync.com / emp123")
     print("   Pradeep:     Pradeep@pecpl.com / Pradeep@123")
     print("   Prakash:     Prakash.kamaraj@sustainworld.in / Prakash@123")
+    print("\n--- NEW COURSES ADDED ---")
+    print(f"Chemical Safety Training ID: {course_ids[-2]}")
+    print(f"Heat Stress Training ID: {course_ids[-1]}")
+    print("-------------------------\n")
 
     client.close()
 

@@ -159,6 +159,99 @@ async def clear_ins_cache(user: dict = Depends(get_current_user)):
     return {"message": "Cache cleared"}
 
 
+@router.get("/assessment-review/{course_id}")
+async def get_assessment_review_insight(course_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] != "employee":
+        raise HTTPException(403, "Only employees")
+
+    db = get_db()
+    uid = str(user["_id"])
+    cache_key = f"{uid}_{course_id}"
+    cached = await db.ai_assessment_insights.find_one({"cache_key": cache_key})
+    if cached and cached.get("expires_at", datetime.min) > datetime.utcnow():
+        return {"insights": cached.get("insights", ""), "cached": True}
+
+    progress = await db.progress.find_one({
+        "user_id": user["_id"],
+        "course_id": course_id,
+        "status": "completed",
+    })
+    if not progress:
+        progress = await db.progress.find_one({
+            "user_id": uid,
+            "course_id": course_id,
+            "status": "completed",
+        })
+    if not progress:
+        raise HTTPException(404, "Completed assessment not found")
+
+    assessment = await db.assessments.find_one({"course_id": course_id})
+    if not assessment:
+        raise HTTPException(404, "Assessment not found")
+
+    try:
+        course = await db.courses.find_one({"_id": ObjectId(course_id)})
+    except Exception:
+        course = None
+
+    answers = progress.get("assessment_answers", [])
+    question_lines = []
+    strengths = 0
+    misses = 0
+    for idx, q in enumerate(assessment.get("questions", [])[:8]):
+        options = q.get("options", [])
+        selected_idx = answers[idx] if idx < len(answers) else None
+        correct_idx = q.get("correct_answer")
+        selected = options[selected_idx] if isinstance(selected_idx, int) and 0 <= selected_idx < len(options) else "Not stored"
+        correct = options[correct_idx] if isinstance(correct_idx, int) and 0 <= correct_idx < len(options) else "Unknown"
+        ok = selected_idx == correct_idx
+        strengths += 1 if ok else 0
+        misses += 0 if ok else 1
+        question_lines.append(
+            f"Q{idx + 1}: {'correct' if ok else 'wrong'}. Selected: {selected}. Correct: {correct}."
+        )
+
+    title = extract_title(course.get("title"), "en") if course else "Completed assessment"
+    prompt = f"""Assessment review for {title}
+Score: {round(progress.get('score', 0), 1)}%
+Correct: {strengths}, Incorrect: {misses}
+{chr(10).join(question_lines)}
+
+Give 3 short bullet points: key strength, main improvement area, next study action.
+Under 18 words each. Plain text bullets only."""
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.25, "maxOutputTokens": 160},
+    }
+
+    try:
+        reply = (await call_gemini_with_fallback(payload)).strip()
+    except Exception as e:
+        logger.error(f"Assessment insight error: {e}")
+        reply = ""
+
+    now = datetime.utcnow()
+    await db.ai_assessment_insights.update_one(
+        {"cache_key": cache_key},
+        {"$set": {
+            "cache_key": cache_key,
+            "user_id": uid,
+            "course_id": course_id,
+            "insights": reply,
+            "generated_at": now,
+            "expires_at": now + timedelta(hours=12),
+        }},
+        upsert=True,
+    )
+    return {"insights": reply, "cached": False}
+
+
+@router.delete("/assessment-review/{course_id}/cache")
+async def clear_assessment_review_insight_cache(course_id: str, user: dict = Depends(get_current_user)):
+    await get_db().ai_assessment_insights.delete_one({"cache_key": f"{str(user['_id'])}_{course_id}"})
+    return {"message": "Cache cleared"}
+
+
 from typing import Optional
 
 class SummarizeRequest(BaseModel):

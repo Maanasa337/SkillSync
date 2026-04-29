@@ -14,13 +14,12 @@ logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCE_Ay7fLk4g-zrVm4TCiXVgsMv9O3xvFE")
 
-# Model fallback chain: primary → fallback
+# Model fallback chain: lite models only to keep AI calls small and responsive.
 GEMINI_MODELS = [
     "gemini-2.5-flash-lite",
     "gemini-flash-lite-latest",
     "gemini-3.1-flash-lite-preview",
     "gemini-2.0-flash-lite",
-    "gemini-2.0-flash",
 ]
 
 SUPPORTED_LANGUAGES = {
@@ -218,8 +217,7 @@ async def find_course_links(db, reply_text: str):
 async def call_gemini_with_fallback(payload: dict) -> str:
     """
     Call Gemini API with model fallback chain.
-    Primary: gemini-1.5-flash
-    Fallback: gemini-1.0-pro (after 2s wait)
+    Primary and fallback models are Gemini lite variants.
     Raises Exception if all models fail.
     """
     last_error = None
