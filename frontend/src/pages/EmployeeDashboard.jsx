@@ -112,7 +112,7 @@ export default function EmployeeDashboard() {
 
   const handleStartAssessment = async () => {
       try {
-          const res = await getAssessment(activeCourse);
+          const res = await getAssessment(activeCourse, language);
           setActiveAssessment(res.data);
           setAnswers({});
       } catch (error) {

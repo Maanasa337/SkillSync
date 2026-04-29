@@ -32,6 +32,25 @@ def resolve_lang(field, lang: str = "en") -> str:
         return val or ""
     return field or ""
 
+
+def normalize_assessment_questions(questions: list[dict]) -> list[dict]:
+    normalized = []
+    for q in questions or []:
+        question = str(q.get("question", "")).strip()
+        options = [str(opt).strip() for opt in q.get("options", []) if str(opt).strip()]
+        correct_answer = q.get("correct_answer", 0)
+        try:
+            correct_answer = int(correct_answer)
+        except Exception:
+            correct_answer = 0
+        if question and len(options) >= 2 and 0 <= correct_answer < len(options):
+            normalized.append({
+                "question": question,
+                "options": options[:4],
+                "correct_answer": correct_answer,
+            })
+    return normalized
+
 async def resolve_and_translate(field, lang: str = "en") -> str:
     """Resolve a multilingual field. Translate dynamically if target lang is missing."""
     if isinstance(field, dict):
@@ -75,6 +94,19 @@ async def _translate_to_all_langs(text: str, source_lang: str) -> dict:
             except Exception:
                 result[lang] = text  # fallback to original
     return result
+
+
+async def _skills_to_english(skills: list[str], source_lang: str) -> list[str]:
+    cleaned = [str(skill).strip() for skill in skills or [] if str(skill).strip()]
+    if source_lang == "en":
+        return cleaned
+    translated = []
+    for skill in cleaned:
+        try:
+            translated.append(await translate(skill, source_lang, "en"))
+        except Exception:
+            translated.append(skill)
+    return translated
 
 
 async def _generate_youtube_links_for_langs(title: str, source_lang: str, source_link: str) -> dict:
@@ -121,6 +153,39 @@ Return ONLY the JSON, no explanation."""
     return result
 
 
+async def _generate_assessment_questions(title: str, description: str, skills: list[str], source_lang: str, count: int = 5) -> list[dict]:
+    lang_names = {"en": "English", "hi": "Hindi", "ta": "Tamil"}
+    lang_name = lang_names.get(source_lang, "English")
+    prompt = f"""Create {count} assessment MCQ questions for this industrial training course.
+Title: "{title}"
+Description: "{description}"
+Skills: {', '.join(skills or [])}
+Language: {lang_name}
+
+Return ONLY JSON in this exact format:
+[
+  {{"question":"...","options":["A","B","C","D"],"correct_answer":0}}
+]
+Rules:
+- Each question must have exactly 4 options.
+- correct_answer is the zero-based index of the right option.
+- Questions and options must be in {lang_name}.
+- No markdown, no explanation."""
+    try:
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.35, "maxOutputTokens": 900}
+        }
+        reply = await call_gemini_with_fallback(payload)
+        m = re.search(r'\[.*\]', reply, re.DOTALL)
+        if not m:
+            return []
+        return normalize_assessment_questions(json.loads(m.group()))[:count]
+    except Exception as e:
+        logger.error(f"Assessment generation failed: {e}")
+        return []
+
+
 @router.post("/courses")
 async def create_course(req: MultilingualCourseCreate, user=Depends(require_role("admin"))):
     db = get_db()
@@ -164,6 +229,10 @@ async def create_course(req: MultilingualCourseCreate, user=Depends(require_role
     else:
         yt_val = str(req.youtube_link)
 
+    skills = await _skills_to_english(req.skills or [], source_lang)
+    duration_minutes = req.duration_minutes or 0
+    duration_days = req.duration_days or 0
+
     # Auto-translate title and description to all languages
     title_ml = await _translate_to_all_langs(title_val, source_lang) if title_val else {"en": "", "hi": "", "ta": ""}
     desc_ml = await _translate_to_all_langs(desc_val, source_lang) if desc_val else {"en": "", "hi": "", "ta": ""}
@@ -178,14 +247,29 @@ async def create_course(req: MultilingualCourseCreate, user=Depends(require_role
         "training_mode": req.training_mode,
         "category": req.category,
         "type": "mandatory",
-        "skills": getattr(req, 'skills', []) or [],
-        "duration_minutes": getattr(req, 'duration_minutes', 0) or 0,
-        "duration_days": 0,
+        "skills": skills,
+        "duration_minutes": duration_minutes,
+        "duration_days": duration_days,
         "linked_scheme": None,
         "incentive_value": 0,
     }
     result = await db.courses.insert_one(course_doc)
-    return {"message": "Course created successfully", "course_id": str(result.inserted_id)}
+    course_id = str(result.inserted_id)
+
+    assessment_questions = normalize_assessment_questions(req.assessment_questions)
+    if req.generate_assessment and not assessment_questions:
+        assessment_questions = await _generate_assessment_questions(title_val, desc_val, skills, source_lang)
+    if assessment_questions:
+        await db.assessments.update_one(
+            {"course_id": course_id},
+            {"$set": {
+                "course_id": course_id,
+                "questions": assessment_questions,
+                "source_lang": source_lang,
+            }},
+            upsert=True,
+        )
+    return {"message": "Course created successfully", "course_id": course_id}
 
 
 @router.put("/courses/{course_id}")
@@ -207,7 +291,7 @@ async def update_course(course_id: str, req: CourseUpdateRequest, user=Depends(r
     yt_ml = await _generate_youtube_links_for_langs(req.title, source_lang, req.youtube_link) if req.youtube_link else course.get("youtube_link", {})
 
     # Translate skills to all languages
-    skills_en = req.skills or []
+    skills_en = await _skills_to_english(req.skills or [], source_lang)
     skills_to_store = skills_en  # Store in English/source, will be translated at read time
 
     update_doc = {
@@ -216,6 +300,7 @@ async def update_course(course_id: str, req: CourseUpdateRequest, user=Depends(r
         "youtube_link": yt_ml,
         "skills": skills_to_store,
         "duration_minutes": req.duration_minutes,
+        "duration_days": req.duration_days,
         "training_mode": req.training_mode,
         "category": req.category,
     }
@@ -227,7 +312,7 @@ async def update_course(course_id: str, req: CourseUpdateRequest, user=Depends(r
 
 @router.post("/courses/generate-ai")
 async def generate_course_ai(req: AIGenerateRequest, user=Depends(require_role("admin"))):
-    """Use AI to generate skills, YouTube link, and duration for a course."""
+    """Use AI to generate skills, YouTube link, duration, and days for a course."""
     lang_names = {"en": "English", "hi": "Hindi", "ta": "Tamil"}
     lang_name = lang_names.get(req.source_lang, "English")
 
@@ -240,9 +325,10 @@ Generate:
 1. A list of 4-6 specific skills employees will acquire (in {lang_name})
 2. A relevant YouTube tutorial/training video URL for this topic (in {lang_name}). Provide a real, plausible YouTube URL.
 3. Estimated duration in minutes (realistic for an industrial training video, typically 15-120 minutes)
+4. Equivalent training duration in days (normally 1-5 days)
 
 Return ONLY a JSON object in this exact format:
-{{"skills": ["skill1", "skill2", ...], "youtube_link": "https://youtube.com/watch?v=...", "duration_minutes": 30}}
+{{"skills": ["skill1", "skill2", ...], "youtube_link": "https://youtube.com/watch?v=...", "duration_minutes": 30, "duration_days": 1}}
 Return ONLY the JSON, no explanation."""
 
     try:
@@ -258,11 +344,18 @@ Return ONLY the JSON, no explanation."""
                 "skills": data.get("skills", [])[:6],
                 "youtube_link": data.get("youtube_link", ""),
                 "duration_minutes": data.get("duration_minutes", 30),
+                "duration_days": data.get("duration_days", 1),
             }
-        return {"skills": [], "youtube_link": "", "duration_minutes": 30}
+        return {"skills": [], "youtube_link": "", "duration_minutes": 30, "duration_days": 1}
     except Exception as e:
         logger.error(f"AI generation failed: {e}")
-        return {"skills": [], "youtube_link": "", "duration_minutes": 30}
+        return {"skills": [], "youtube_link": "", "duration_minutes": 30, "duration_days": 1}
+
+
+@router.post("/courses/generate-assessment-ai")
+async def generate_assessment_ai(req: AIGenerateRequest, user=Depends(require_role("admin"))):
+    questions = await _generate_assessment_questions(req.title, req.description, [], req.source_lang)
+    return {"questions": questions}
 
 
 @router.get("/courses")
@@ -290,6 +383,7 @@ async def get_all_courses(lang: Optional[str] = Query(default="en")):
             "description": await resolve_and_translate(c.get("description", ""), lang),
             "skills": translated_skills,
             "duration_minutes": c.get("duration_minutes", 0),
+            "duration_days": c.get("duration_days", 0),
             "linked_scheme": c.get("linked_scheme"),
             "incentive_value": c.get("incentive_value", 0),
             "training_mode": c.get("training_mode", "online"),
@@ -357,4 +451,3 @@ async def get_course_leaderboard(course_id: str):
             })
 
     return leaderboard
-

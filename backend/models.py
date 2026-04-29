@@ -67,6 +67,11 @@ class MultilingualCourseCreate(BaseModel):
     youtube_link: dict  # {"en": "", "hi": "", "ta": ""}
     training_mode: str  # online, offline, self-paced, classroom
     category: str
+    skills: list[str] = []
+    duration_minutes: int = 0
+    duration_days: int = 0
+    generate_assessment: bool = False
+    assessment_questions: list[dict] = []
 
 
 class AssignCourseRequest(BaseModel):
@@ -119,6 +124,7 @@ class CourseUpdateRequest(BaseModel):
     youtube_link: str = ""
     skills: list[str] = []
     duration_minutes: int = 0
+    duration_days: int = 0
     source_lang: str = "en"  # the language the admin filled in
     training_mode: str = "online"
     category: str = "Safety"

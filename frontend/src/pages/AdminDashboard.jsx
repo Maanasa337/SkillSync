@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { getAdminDashboard, getEmployees, getAllCourses, addEmployee, claimIncentive, getDepartmentAnalytics, createCourse, assignIndividual, assignDepartment, assignAll, getDeptEmployees, getIncentiveDetails, assignEmployeesToScheme, uploadCourseMaterial, getCourseMaterials, deleteCourseMaterial, updateCourse, updateEmployee, getEmployeeCourses, deassignCourse, generateCourseAI } from '../api';
+import { getAdminDashboard, getEmployees, getAllCourses, addEmployee, claimIncentive, getDepartmentAnalytics, createCourse, assignIndividual, assignDepartment, assignAll, getDeptEmployees, getIncentiveDetails, assignEmployeesToScheme, uploadCourseMaterial, getCourseMaterials, deleteCourseMaterial, updateCourse, updateEmployee, getEmployeeCourses, deassignCourse, generateCourseAI, generateAssessmentAI } from '../api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { IconUsers, IconCheckCircle, IconClock, IconDollarSign, IconTrendingUp, IconAward, IconAlertCircle, IconX, IconGlobe, IconBuilding, IconBook } from '../components/Icons';
 import { useLanguage } from '../context/LanguageContext';
@@ -104,6 +104,9 @@ export default function AdminDashboard() {
     category: 'Safety',
     skills: [],
     duration_minutes: 0,
+    duration_days: 0,
+    generate_assessment: false,
+    assessment_questions: [],
   });
   const [createStatus, setCreateStatus] = useState({ loading: false, msg: '', err: '' });
   const [courseFiles, setCourseFiles] = useState([]);
@@ -116,7 +119,7 @@ export default function AdminDashboard() {
   // Edit Course Modal
   const [showEditCourse, setShowEditCourse] = useState(false);
   const [editCourseId, setEditCourseId] = useState('');
-  const [editCourseForm, setEditCourseForm] = useState({ title: '', description: '', youtube_link: '', skills: [], duration_minutes: 0, training_mode: 'online', category: 'Safety' });
+  const [editCourseForm, setEditCourseForm] = useState({ title: '', description: '', youtube_link: '', skills: [], duration_minutes: 0, duration_days: 0, training_mode: 'online', category: 'Safety' });
   const [editCourseStatus, setEditCourseStatus] = useState({ loading: false, msg: '', err: '' });
   const [editCourseMaterials, setEditCourseMaterials] = useState([]);
   const [editCourseFiles, setEditCourseFiles] = useState([]);
@@ -140,6 +143,7 @@ export default function AdminDashboard() {
 
   // Create course AI gen
   const [createAiGenLoading, setCreateAiGenLoading] = useState(false);
+  const [assessmentGenLoading, setAssessmentGenLoading] = useState(false);
   const [createSkillInput, setCreateSkillInput] = useState('');
 
   const fetchScoreboard = async (cId) => {
@@ -225,6 +229,7 @@ export default function AdminDashboard() {
       youtube_link: course.youtube_link || '',
       skills: course.skills_raw || course.skills || [],
       duration_minutes: course.duration_minutes || 0,
+      duration_days: course.duration_days || 0,
       training_mode: course.training_mode || 'online',
       category: course.category || 'Safety',
     });
@@ -257,7 +262,7 @@ export default function AdminDashboard() {
       setEditCourseStatus({ loading: false, msg: 'Course updated!', err: '' });
       setShowEditCourse(false);
       setActionMsg('Course updated and translations generated!');
-      fetchData();
+      await fetchData();
       setTimeout(() => setActionMsg(''), 3000);
     } catch (err) {
       setEditCourseStatus({ loading: false, msg: '', err: err.response?.data?.detail || 'Failed to update course' });
@@ -296,6 +301,7 @@ export default function AdminDashboard() {
           youtube_link: { ...prev.youtube_link, [language]: data.youtube_link || '' },
           skills: data.skills || [],
           duration_minutes: data.duration_minutes || 0,
+          duration_days: data.duration_days || 0,
         }));
       } else {
         setEditCourseForm(prev => ({
@@ -303,6 +309,7 @@ export default function AdminDashboard() {
           youtube_link: data.youtube_link || prev.youtube_link,
           skills: data.skills || prev.skills,
           duration_minutes: data.duration_minutes || prev.duration_minutes,
+          duration_days: data.duration_days || prev.duration_days,
         }));
       }
       setActionMsg('AI generated fields successfully!');
@@ -312,6 +319,27 @@ export default function AdminDashboard() {
       setTimeout(() => setActionMsg(''), 2000);
     }
     if (isCreate) setCreateAiGenLoading(false); else setAiGenLoading(false);
+  };
+
+  const handleGenerateAssessment = async () => {
+    const titleVal = createForm.title?.[language] || createForm.title?.en || '';
+    const descVal = createForm.description?.[language] || createForm.description?.en || '';
+    if (!titleVal) { setActionMsg('Enter a title first'); setTimeout(() => setActionMsg(''), 2000); return; }
+    setAssessmentGenLoading(true);
+    try {
+      const res = await generateAssessmentAI({ title: titleVal, description: descVal, source_lang: language });
+      setCreateForm(prev => ({
+        ...prev,
+        generate_assessment: true,
+        assessment_questions: res.data.questions || [],
+      }));
+      setActionMsg('Assessment questions generated!');
+      setTimeout(() => setActionMsg(''), 2000);
+    } catch (err) {
+      setActionMsg('Assessment generation failed');
+      setTimeout(() => setActionMsg(''), 2000);
+    }
+    setAssessmentGenLoading(false);
   };
 
   // --- Edit Employee ---
@@ -385,7 +413,11 @@ export default function AdminDashboard() {
     e.preventDefault();
     setCreateStatus({ loading: true, msg: '', err: '' });
     try {
-      const res = await createCourse(createForm);
+      const coursePayload = {
+        ...createForm,
+        assessment_questions: createForm.generate_assessment ? (createForm.assessment_questions || []) : [],
+      };
+      const res = await createCourse(coursePayload);
       const newCourseId = res.data?.course_id;
 
       if (courseFiles.length > 0 && newCourseId) {
@@ -396,14 +428,20 @@ export default function AdminDashboard() {
       }
 
       setCreateStatus({ loading: false, msg: 'Course created successfully!', err: '' });
-      fetchData();
+      await fetchData();
+      setActiveSection('courses');
       setShowCreateCourse(false);
       setCreateForm({
         title: { en: '', hi: '', ta: '' },
         description: { en: '', hi: '', ta: '' },
         youtube_link: { en: '', hi: '', ta: '' },
         training_mode: 'online',
-        category: 'Safety'
+        category: 'Safety',
+        skills: [],
+        duration_minutes: 0,
+        duration_days: 0,
+        generate_assessment: false,
+        assessment_questions: [],
       });
       setCourseFiles([]);
       setActionMsg('Course created successfully!');
@@ -739,6 +777,7 @@ export default function AdminDashboard() {
                         <th>Category</th>
                         <th>Mode</th>
                         <th>Duration</th>
+                        <th>Days</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -749,6 +788,7 @@ export default function AdminDashboard() {
                           <td><span className="badge badge-primary">{c.category}</span></td>
                           <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{c.training_mode}</td>
                           <td style={{ fontSize: '13px' }}>{c.duration_minutes || 0} mins</td>
+                          <td style={{ fontSize: '13px' }}>{c.duration_days || 0} days</td>
                           <td>
                             <button className="btn btn-outline btn-sm" onClick={() => openEditCourse(c)}>✏️ Edit</button>
                           </td>
@@ -774,6 +814,7 @@ export default function AdminDashboard() {
                       <th>Category</th>
                       <th>Mode</th>
                       <th>Duration</th>
+                      <th>Days</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -784,6 +825,7 @@ export default function AdminDashboard() {
                         <td><span className="badge badge-primary">{c.category}</span></td>
                         <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{c.training_mode}</td>
                         <td style={{ fontSize: '13px' }}>{c.duration_minutes || 0} mins</td>
+                        <td style={{ fontSize: '13px' }}>{c.duration_days || 0} days</td>
                         <td>
                           <button className="btn btn-outline btn-sm" onClick={() => openEditCourse(c)}>Edit</button>
                         </td>
@@ -1488,14 +1530,20 @@ export default function AdminDashboard() {
               </div>
 
               {/* Duration */}
-              <div className="input-group" style={{ marginBottom: '15px' }}>
-                <label>Duration (minutes)</label>
-                <input type="number" value={createForm.duration_minutes || 0} onChange={e => setCreateForm({ ...createForm, duration_minutes: parseInt(e.target.value) || 0 })} min={0} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                <div className="input-group">
+                  <label>Duration (minutes)</label>
+                  <input type="number" value={createForm.duration_minutes || 0} onChange={e => setCreateForm({ ...createForm, duration_minutes: parseInt(e.target.value) || 0 })} min={0} />
+                </div>
+                <div className="input-group">
+                  <label>Training Days Equivalent</label>
+                  <input type="number" value={createForm.duration_days || 0} onChange={e => setCreateForm({ ...createForm, duration_days: parseInt(e.target.value) || 0 })} min={0} />
+                </div>
               </div>
 
               {/* AI Generate Button */}
               <button type="button" className="btn btn-outline" style={{ width: '100%', marginBottom: '15px', justifyContent: 'center', background: 'linear-gradient(135deg, #f0f4ff, #e8f5e9)', border: '1px solid var(--primary-light)' }} onClick={() => handleAIGenerate(true)} disabled={createAiGenLoading}>
-                {createAiGenLoading ? '⏳ Generating...' : '✨ Generate Skills, YouTube Link & Duration with AI'}
+                {createAiGenLoading ? 'Generating...' : 'Generate Skills, YouTube Link, Duration & Days with AI'}
               </button>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
@@ -1518,6 +1566,42 @@ export default function AdminDashboard() {
                     <option value="HR">HR</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="input-group" style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={createForm.generate_assessment}
+                    onChange={e => setCreateForm({ ...createForm, generate_assessment: e.target.checked })}
+                  />
+                  Auto-generate assessment MCQs
+                </label>
+                <button type="button" className="btn btn-outline" style={{ width: '100%', marginTop: '10px', justifyContent: 'center' }} onClick={handleGenerateAssessment} disabled={assessmentGenLoading}>
+                  {assessmentGenLoading ? 'Generating assessment...' : 'Generate Assessment Questions with AI'}
+                </button>
+                {(createForm.assessment_questions || []).length > 0 && (
+                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {createForm.assessment_questions.map((q, qIdx) => (
+                      <div key={qIdx} style={{ padding: '12px', border: '1px solid var(--border-light)', borderRadius: '8px', background: 'var(--surface-hover)' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 700 }}>Question {qIdx + 1}</label>
+                        <input value={q.question || ''} onChange={e => setCreateForm(prev => ({ ...prev, assessment_questions: prev.assessment_questions.map((item, idx) => idx === qIdx ? { ...item, question: e.target.value } : item) }))} style={{ marginTop: '6px', marginBottom: '8px' }} />
+                        {(q.options || []).map((opt, optIdx) => (
+                          <div key={optIdx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
+                            <input
+                              type="radio"
+                              name={`correct-${qIdx}`}
+                              checked={q.correct_answer === optIdx}
+                              onChange={() => setCreateForm(prev => ({ ...prev, assessment_questions: prev.assessment_questions.map((item, idx) => idx === qIdx ? { ...item, correct_answer: optIdx } : item) }))}
+                              aria-label={`Correct option ${optIdx + 1}`}
+                            />
+                            <input value={opt} onChange={e => setCreateForm(prev => ({ ...prev, assessment_questions: prev.assessment_questions.map((item, idx) => idx === qIdx ? { ...item, options: item.options.map((o, oi) => oi === optIdx ? e.target.value : o) } : item) }))} />
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="input-group" style={{ marginBottom: '20px' }}>
@@ -1600,14 +1684,20 @@ export default function AdminDashboard() {
               </div>
 
               {/* Duration */}
-              <div className="input-group" style={{ marginBottom: '15px' }}>
-                <label>Duration (minutes)</label>
-                <input type="number" value={editCourseForm.duration_minutes} onChange={e => setEditCourseForm({ ...editCourseForm, duration_minutes: parseInt(e.target.value) || 0 })} min={0} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                <div className="input-group">
+                  <label>Duration (minutes)</label>
+                  <input type="number" value={editCourseForm.duration_minutes} onChange={e => setEditCourseForm({ ...editCourseForm, duration_minutes: parseInt(e.target.value) || 0 })} min={0} />
+                </div>
+                <div className="input-group">
+                  <label>Training Days Equivalent</label>
+                  <input type="number" value={editCourseForm.duration_days} onChange={e => setEditCourseForm({ ...editCourseForm, duration_days: parseInt(e.target.value) || 0 })} min={0} />
+                </div>
               </div>
 
               {/* AI Generate Button */}
               <button type="button" className="btn btn-outline" style={{ width: '100%', marginBottom: '15px', justifyContent: 'center', background: 'linear-gradient(135deg, #f0f4ff, #e8f5e9)', border: '1px solid var(--primary-light)' }} onClick={() => handleAIGenerate(false)} disabled={aiGenLoading}>
-                {aiGenLoading ? '⏳ Generating...' : '✨ Generate Skills, YouTube Link & Duration with AI'}
+                {aiGenLoading ? 'Generating...' : 'Generate Skills, YouTube Link, Duration & Days with AI'}
               </button>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>

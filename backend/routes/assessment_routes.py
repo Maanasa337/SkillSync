@@ -31,19 +31,20 @@ async def get_assessment(course_id: str, lang: Optional[str] = Query(default="en
     assessment = await db.assessments.find_one({"course_id": course_id})
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found for this course")
+    source_lang = assessment.get("source_lang", "en")
         
     # Return questions without the correct answers
     safe_questions = []
     
     async def translate_q(q):
         try:
-            t_q = await translate(q["question"], "en", lang) if lang != "en" else q["question"]
-            t_opts = await asyncio.gather(*(translate(o, "en", lang) for o in q["options"])) if lang != "en" else q["options"]
+            t_q = await translate(q["question"], source_lang, lang) if lang != source_lang else q["question"]
+            t_opts = await asyncio.gather(*(translate(o, source_lang, lang) for o in q["options"])) if lang != source_lang else q["options"]
             return {"question": t_q, "options": list(t_opts)}
         except Exception:
             return {"question": q["question"], "options": q["options"]}
 
-    if lang != "en":
+    if lang != source_lang:
         safe_questions = await asyncio.gather(*(translate_q(q) for q in assessment["questions"]))
         safe_questions = list(safe_questions)
     else:
@@ -156,6 +157,7 @@ async def get_assessment_review(course_id: str, lang: Optional[str] = Query(defa
     assessment = await db.assessments.find_one({"course_id": course_id})
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
+    source_lang = assessment.get("source_lang", "en")
 
     course = None
     try:
@@ -173,16 +175,16 @@ async def get_assessment_review(course_id: str, lang: Optional[str] = Query(defa
     review = []
 
     async def translate_text(text):
-        if lang == "en":
+        if lang == source_lang:
             return text
         try:
-            return await translate(text, "en", lang)
+            return await translate(text, source_lang, lang)
         except Exception:
             return text
 
     for idx, q in enumerate(questions):
         options = q.get("options", [])
-        if lang != "en":
+        if lang != source_lang:
             translated_options = await asyncio.gather(*(translate_text(o) for o in options))
             options = list(translated_options)
 

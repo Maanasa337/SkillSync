@@ -68,6 +68,7 @@ export const updateCourse = (courseId, data) => api.put(`/courses/${courseId}`, 
 
 // AI generate course fields
 export const generateCourseAI = (data) => api.post('/courses/generate-ai', data);
+export const generateAssessmentAI = (data) => api.post('/courses/generate-assessment-ai', data);
 
 // Edit employee
 export const updateEmployee = (employeeId, data) => api.put(`/employees/${employeeId}`, data);
@@ -80,7 +81,7 @@ export const deassignCourse = (employeeId, courseId) => api.delete(`/employees/$
 export const getEmployeeDashboard = (lang) => api.get('/dashboard/employee', { params: { lang: lang || 'en' } });
 export const getMyCourses = (lang) => api.get('/courses/my', { params: { lang: lang || 'en' } });
 export const getCourseDetail = (courseId, lang) => api.get(`/courses/${courseId}`, { params: { lang: lang || 'en' } });
-export const getAssessment = (courseId) => api.get(`/assessments/${courseId}`);
+export const getAssessment = (courseId, lang) => api.get(`/assessments/${courseId}`, { params: { lang: lang || 'en' } });
 export const submitAssessment = (data) => api.post('/assessment/submit', data);
 export const getAssessmentReview = (courseId, lang) => api.get(`/assessments/${courseId}/review`, { params: { lang: lang || 'en' } });
 
