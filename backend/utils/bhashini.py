@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 import os
 
-BHASHINI_URL = "https://dhruva-api.bhashini.gov.in/services/inference/pipeline"
-BHASHINI_UDYATH_KEY = os.getenv("BHASHINI_UDYATH_KEY", "53a0d9ed53-bb03-4004-b073-0e86b55c384a")
-BHASHINI_API_KEY = os.getenv("BHASHINI_API_KEY", "wyq26lZ_59P0QjUvXH0kd3_0sBvIYNZG59ZK6TEvcZ_mqCag2hkkOH0AvcqyLemW")
+BHASHINI_URL = os.getenv("BHASHINI_URL", "https://dhruva-api.bhashini.gov.in/services/inference/pipeline")
+BHASHINI_UDYATH_KEY = os.getenv("BHASHINI_UDYATH_KEY")
+BHASHINI_API_KEY = os.getenv("BHASHINI_API_KEY")
 
 # In-memory cache keyed by "text:src:tgt"
 _translation_cache: dict[str, str] = {}

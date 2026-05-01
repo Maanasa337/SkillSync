@@ -10,3 +10,4 @@ pydantic[email]
 httpx
 PyMuPDF
 python-pptx
+python-dotenv

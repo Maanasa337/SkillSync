@@ -12,7 +12,7 @@ from bson import ObjectId
 router = APIRouter(prefix="/api/chatbot", tags=["Chatbot"])
 logger = logging.getLogger(__name__)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCE_Ay7fLk4g-zrVm4TCiXVgsMv9O3xvFE")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Model fallback chain: lite models only to keep AI calls small and responsive.
 GEMINI_MODELS = [
